@@ -2,9 +2,9 @@ python test_servers.py
 🚀 SWIFTLOGISTICS SYSTEM PROTOTYPE TESTING
 Testing all three heterogeneous systems...
 
-============================================================
-TESTING CMS (SOAP/XML) - Port 5001
-============================================================
+---
+
+###TESTING CMS (SOAP/XML) - Port 5001
 
 1. Testing CMS Health Check...
    Health Status: 200
