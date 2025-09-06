@@ -2,9 +2,12 @@ python test_servers.py
 🚀 SWIFTLOGISTICS SYSTEM PROTOTYPE TESTING
 Testing all three heterogeneous systems...
 
+Please make sure to install flask before hand :
+pip install flask
+
 ---
 
-###TESTING CMS (SOAP/XML) - Port 5001
+### TESTING CMS (SOAP/XML) - Port 5001
 
 1. Testing CMS Health Check...
    Health Status: 200
@@ -18,9 +21,9 @@ Testing all three heterogeneous systems...
    Create Order Status: 200
    ✅ Order Created: ORD202509050001
 
-============================================================
-TESTING ROS (REST/JSON) - Port 5002
-============================================================
+---
+
+### TESTING ROS (REST/JSON) - Port 5002
 
 1. Testing ROS Health Check...
    Health Status: 200
@@ -40,9 +43,10 @@ TESTING ROS (REST/JSON) - Port 5002
    Estimated Time: 21 minutes
    Optimized Stops: 3
 
-============================================================
-TESTING WMS (TCP/IP) - Port 5003
-============================================================
+---
+
+### TESTING WMS (TCP/IP) - Port 5003
+
 
 1. Connecting to WMS TCP Server...
    ✅ Connected to WMS successfully
@@ -67,17 +71,19 @@ TESTING WMS (TCP/IP) - Port 5003
    Assigned Zone: A
    ✅ WMS TCP connection closed
 
-============================================================
-INTEGRATION FLOW TEST
-============================================================
+---
+
+### INTEGRATION FLOW TEST
+
 
 🔄 Testing complete order processing flow...
 
 📝 Step 1: Creating order in CMS...
 
-============================================================
-TESTING CMS (SOAP/XML) - Port 5001
-============================================================
+---
+
+### TESTING CMS (SOAP/XML) - Port 5001
+
 
 1. Testing CMS Health Check...
    Health Status: 200
@@ -93,9 +99,9 @@ TESTING CMS (SOAP/XML) - Port 5001
 
 🚚 Step 2: Optimizing delivery route in ROS...
 
-============================================================
-TESTING ROS (REST/JSON) - Port 5002
-============================================================
+---
+
+### TESTING ROS (REST/JSON) - Port 5002
 
 1. Testing ROS Health Check...
    Health Status: 200
@@ -117,9 +123,10 @@ TESTING ROS (REST/JSON) - Port 5002
 
 📦 Step 3: Tracking package in WMS...
 
-============================================================
-TESTING WMS (TCP/IP) - Port 5003
-============================================================
+---
+
+### TESTING WMS (TCP/IP) - Port 5003
+
 
 1. Connecting to WMS TCP Server...
    ✅ Connected to WMS successfully
@@ -148,9 +155,10 @@ TESTING WMS (TCP/IP) - Port 5003
 Order ID: ORD202509050002
 Route ID: RT20250905232626303
 
-============================================================
-TESTING COMPLETED
-============================================================
+---
+
+### TESTING COMPLETED
+
 ✅ All systems are operational and ready for middleware integration!
 
 Next Steps:
