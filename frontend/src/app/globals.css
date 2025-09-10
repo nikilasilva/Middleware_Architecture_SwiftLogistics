@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Add this to your existing globals.css file */
+#next-logo,
+[data-nextjs-dev-tools-button="true"] {
+  display: none !important;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  font-family: 'Lexend', system-ui, sans-serif;
+  color: #000000;
+  background: #ffffff;
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-black hover:bg-gray-800 text-white font-medium py-2 px-4 rounded transition-colors cursor-pointer border-none;
+  }
+
+  .btn-secondary {
+    @apply bg-white border border-black hover:bg-gray-100 text-black font-medium py-2 px-4 rounded transition-colors cursor-pointer;
+  }
+
+  .card {
+    @apply bg-white border border-gray-300 rounded-lg shadow-sm hover:shadow-md transition-shadow;
+  }
+}
