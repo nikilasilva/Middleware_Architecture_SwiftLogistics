@@ -1,14 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import TrackOrders from "../components/TrackOrders";
+import Analytics from "../components/Analytics";
 
 export default function Home() {
-  const [currentView, setCurrentView] = useState<"dashboard" | "createOrder">(
-    "dashboard"
-  );
+  const [currentView, setCurrentView] = useState<
+    "dashboard" | "createOrder" | "trackOrders" | "analytics"
+  >("dashboard");
 
   const showOrderForm = () => setCurrentView("createOrder");
   const showDashboard = () => setCurrentView("dashboard");
+  const showTrackOrders = () => setCurrentView("trackOrders");
+  const showAnalytics = () => setCurrentView("analytics");
 
   const DashboardWithNavigation = () => (
     <div className="min-h-screen bg-white text-black">
@@ -31,7 +35,6 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-
         {/* Welcome Section */}
         <div className="text-center mb-12">
           <h2 className="text-4xl font-bold text-black mb-4">
@@ -77,7 +80,10 @@ export default function Home() {
               <p className="text-gray-600 mb-6">
                 Monitor your shipments and get real-time delivery updates
               </p>
-              <button className="btn-primary w-full py-3">
+              <button
+                onClick={showTrackOrders}
+                className="btn-primary w-full py-3"
+              >
                 Track Shipments
               </button>
             </div>
@@ -94,7 +100,12 @@ export default function Home() {
               <p className="text-gray-600 mb-6">
                 View delivery statistics and performance metrics
               </p>
-              <button className="btn-primary w-full py-3">View Reports</button>
+              <button
+                onClick={showAnalytics}
+                className="btn-primary w-full py-3"
+              >
+                View Reports
+              </button>
             </div>
           </div>
         </div>
@@ -226,6 +237,8 @@ export default function Home() {
     <div>
       {currentView === "dashboard" && <DashboardWithNavigation />}
       {currentView === "createOrder" && <OrderForm onBack={showDashboard} />}
+      {currentView === "trackOrders" && <TrackOrders onBack={showDashboard} />}
+      {currentView === "analytics" && <Analytics onBack={showDashboard} />}
     </div>
   );
 }
