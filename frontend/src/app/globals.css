@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Add this to your existing globals.css file */
+#next-logo,
+[data-nextjs-dev-tools-button="true"] {
+  display: none !important;
+}
+
 * {
   box-sizing: border-box;
   padding: 0;
