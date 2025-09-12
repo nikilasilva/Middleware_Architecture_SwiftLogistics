@@ -1,0 +1,11 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:cms="http://swiftlogistics.com/cms">
+   <soapenv:Header/>
+   <soapenv:Body>
+      <cms:Order>
+         <orderId>ORD-1001</orderId>
+         <clientId>CLIENT-42</clientId>
+         <pickupAddress>Warehouse A</pickupAddress>
+         <deliveryAddress>Customer Road 123</deliveryAddress>
+      </cms:Order>
+   </soapenv:Body>
+</soapenv:Envelope>
