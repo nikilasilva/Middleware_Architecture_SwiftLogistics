@@ -1,0 +1,141 @@
+server:
+  port: 8089  # Changed from 8088 to avoid conflict with notification service
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      routes:
+        # Order Service Routes
+        - id: order-service
+          uri: lb://order-service
+          predicates:
+            - Path=/api/orders/**
+          filters:
+            - StripPrefix=0
+        
+        # Client Service Routes
+        - id: client-service
+          uri: lb://client-service
+          predicates:
+            - Path=/api/clients/**
+          filters:
+            - StripPrefix=0
+        
+        # Route Service Routes
+        - id: route-service
+          uri: lb://route-service
+          predicates:
+            - Path=/api/routes/**
+          filters:
+            - StripPrefix=0
+        
+        # Warehouse Service Routes
+        - id: warehouse-service
+          uri: lb://warehouse-service
+          predicates:
+            - Path=/api/warehouse/**
+          filters:
+            - StripPrefix=0
+        
+        # Notification Service Routes
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/notifications/**
+          filters:
+            - StripPrefix=0
+        
+        # ESB Direct Access Routes (for debugging/direct access)
+        - id: esb-service-orders
+          uri: lb://esb-service
+          predicates:
+            - Path=/esb/orders/**
+          filters:
+            - StripPrefix=0
+        
+        - id: esb-service-process
+          uri: lb://esb-service
+          predicates:
+            - Path=/esb/processOrder/**
+          filters:
+            - StripPrefix=0
+        
+        - id: esb-service-health
+          uri: lb://esb-service
+          predicates:
+            - Path=/esb/health/**
+          filters:
+            - StripPrefix=0
+            
+        # Catch-all ESB routes
+        - id: esb-service
+          uri: lb://esb-service
+          predicates:
+            - Path=/esb/**
+          filters:
+            - StripPrefix=0
+
+      # Global CORS configuration
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: false
+
+      # Default filters for all routes
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+        - AddResponseHeader=X-Response-Time, {now}
+
+      # HTTP client configuration (merged here)
+      httpclient:
+        connect-timeout: 5000
+        response-timeout: 10s
+      
+      # Discovery configuration (merged here)
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+
+# Eureka Configuration
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 30
+
+# Management/Actuator endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway,routes,env
+  endpoint:
+    health:
+      show-details: when-authorized
+    gateway:
+      enabled: true
+
+# Logging configuration
+logging:
+  level:
+    root: INFO
+    org.springframework.cloud.gateway: DEBUG
+    org.springframework.web: INFO
+    reactor.netty: INFO
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
