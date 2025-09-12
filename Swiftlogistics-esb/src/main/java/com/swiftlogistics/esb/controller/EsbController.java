@@ -98,4 +98,259 @@ public class EsbController {
             return ResponseEntity.internalServerError().body(errorResponse);
         }
     }
+
+    // 3. Get order status from all systems
+    @GetMapping("/orders/{orderId}/status")
+    public ResponseEntity<Map<String, Object>> getOrderStatus(@PathVariable("orderId") String orderId) {
+        logger.info("Getting status for order: {}", orderId);
+
+        try {
+            Map<String, Object> status = new HashMap<>();
+
+            // Get status from CMS
+            String cmsStatus = cmsService.getOrderStatus(orderId);
+
+            // Get route status from ROS
+            String routeStatus = rosService.getRouteStatus(orderId);
+
+            // Get package status from WMS
+            String packageStatus = wmsService.getPackageStatus(orderId);
+
+            status.put("orderId", orderId);
+            status.put("cmsStatus", cmsStatus);
+            status.put("routeStatus", routeStatus);
+            status.put("packageStatus", packageStatus);
+            status.put("timestamp", System.currentTimeMillis());
+
+            return ResponseEntity.ok(status);
+
+        } catch (Exception e) {
+            logger.error("Error getting order status: ", e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", e.getMessage());
+            return ResponseEntity.internalServerError().body(errorResponse);
+        }
+    }
+
+    // 4. Update order status
+    // @PutMapping("/orders/{orderId}/status")
+    // public ResponseEntity<Map<String, Object>> updateOrderStatus(
+    // @PathVariable String orderId,
+    // @RequestParam String status,
+    // @RequestParam(required = false) String system) {
+
+    // logger.info("Updating order {} status to {} from system {}", orderId, status,
+    // system);
+
+    // try {
+    // Map<String, Object> response = new HashMap<>();
+
+    // if ("CMS".equalsIgnoreCase(system) || system == null) {
+    // String cmsResponse = cmsService.updateOrderStatus(orderId, status);
+    // response.put("cmsUpdate", cmsResponse);
+    // }
+
+    // if ("ROS".equalsIgnoreCase(system) || system == null) {
+    // String rosResponse = rosService.updateRouteStatus(orderId, status);
+    // response.put("rosUpdate", rosResponse);
+    // }
+
+    // if ("WMS".equalsIgnoreCase(system) || system == null) {
+    // String wmsResponse = wmsService.updatePackageStatus(orderId, status);
+    // response.put("wmsUpdate", wmsResponse);
+    // }
+
+    // response.put("success", true);
+    // response.put("orderId", orderId);
+    // response.put("newStatus", status);
+
+    // return ResponseEntity.ok(response);
+
+    // } catch (Exception e) {
+    // logger.error("Error updating order status: ", e);
+    // Map<String, Object> errorResponse = new HashMap<>();
+    // errorResponse.put("success", false);
+    // errorResponse.put("error", e.getMessage());
+    // return ResponseEntity.internalServerError().body(errorResponse);
+    // }
+    // }
+
+    // // 5. Health check for all systems
+    // @GetMapping("/health")
+    // public ResponseEntity<Map<String, Object>> healthCheck() {
+    // logger.info("Performing health check on all systems");
+
+    // Map<String, Object> health = new HashMap<>();
+
+    // try {
+    // // Check CMS health
+    // boolean cmsHealthy = cmsService.isHealthy();
+    // health.put("cms", Map.of("status", cmsHealthy ? "UP" : "DOWN"));
+
+    // // Check ROS health
+    // boolean rosHealthy = rosService.isHealthy();
+    // health.put("ros", Map.of("status", rosHealthy ? "UP" : "DOWN"));
+
+    // // Check WMS health
+    // boolean wmsHealthy = wmsService.isHealthy();
+    // health.put("wms", Map.of("status", wmsHealthy ? "UP" : "DOWN"));
+
+    // boolean allHealthy = cmsHealthy && rosHealthy && wmsHealthy;
+    // health.put("overall", allHealthy ? "UP" : "DOWN");
+    // health.put("timestamp", System.currentTimeMillis());
+
+    // return ResponseEntity.ok(health);
+
+    // } catch (Exception e) {
+    // logger.error("Error during health check: ", e);
+    // health.put("overall", "DOWN");
+    // health.put("error", e.getMessage());
+    // return ResponseEntity.internalServerError().body(health);
+    // }
+    // }
+
+    // // 6. Route optimization endpoint
+    // @PostMapping("/routes/optimize")
+    // public ResponseEntity<Map<String, Object>> optimizeRoute(@RequestBody
+    // Map<String, Object> routeRequest) {
+    // logger.info("Optimizing route: {}", routeRequest);
+
+    // try {
+    // String vehicleId = (String) routeRequest.get("vehicleId");
+    // String address = (String) routeRequest.get("address");
+
+    // String routeResponse = rosService.optimizeRoute(address);
+
+    // Map<String, Object> response = new HashMap<>();
+    // response.put("success", true);
+    // response.put("routeOptimization", routeResponse);
+    // response.put("vehicleId", vehicleId);
+
+    // return ResponseEntity.ok(response);
+
+    // } catch (Exception e) {
+    // logger.error("Error optimizing route: ", e);
+    // Map<String, Object> errorResponse = new HashMap<>();
+    // errorResponse.put("success", false);
+    // errorResponse.put("error", e.getMessage());
+    // return ResponseEntity.internalServerError().body(errorResponse);
+    // }
+    // }
+
+    // // 7. Package tracking endpoint
+    // @GetMapping("/packages/{packageId}/track")
+    // public ResponseEntity<Map<String, Object>> trackPackage(@PathVariable String
+    // packageId) {
+    // logger.info("Tracking package: {}", packageId);
+
+    // try {
+    // Map<String, Object> tracking = new HashMap<>();
+
+    // // Get package info from WMS
+    // String wmsInfo = wmsService.getPackageInfo(packageId);
+
+    // // Get related order info from CMS
+    // String cmsInfo = cmsService.getPackageOrderInfo(packageId);
+
+    // // Get route info from ROS
+    // String routeInfo = rosService.getPackageRouteInfo(packageId);
+
+    // tracking.put("packageId", packageId);
+    // tracking.put("warehouseInfo", wmsInfo);
+    // tracking.put("orderInfo", cmsInfo);
+    // tracking.put("routeInfo", routeInfo);
+    // tracking.put("timestamp", System.currentTimeMillis());
+
+    // return ResponseEntity.ok(tracking);
+
+    // } catch (Exception e) {
+    // logger.error("Error tracking package: ", e);
+    // Map<String, Object> errorResponse = new HashMap<>();
+    // errorResponse.put("error", e.getMessage());
+    // return ResponseEntity.internalServerError().body(errorResponse);
+    // }
+    // }
+
+    // // 8. Client information endpoint
+    // @GetMapping("/clients/{clientId}")
+    // public ResponseEntity<Map<String, Object>> getClientInfo(@PathVariable String
+    // clientId) {
+    // logger.info("Getting client info for: {}", clientId);
+
+    // try {
+    // String clientInfo = cmsService.fetchClientData(clientId);
+
+    // Map<String, Object> response = new HashMap<>();
+    // response.put("clientId", clientId);
+    // response.put("clientInfo", clientInfo);
+    // response.put("timestamp", System.currentTimeMillis());
+
+    // return ResponseEntity.ok(response);
+
+    // } catch (Exception e) {
+    // logger.error("Error getting client info: ", e);
+    // Map<String, Object> errorResponse = new HashMap<>();
+    // errorResponse.put("error", e.getMessage());
+    // return ResponseEntity.internalServerError().body(errorResponse);
+    // }
+    // }
+
+    // // 9. System statistics endpoint
+    // @GetMapping("/stats")
+    // public ResponseEntity<Map<String, Object>> getSystemStats() {
+    // logger.info("Getting system statistics");
+
+    // try {
+    // Map<String, Object> stats = new HashMap<>();
+
+    // // Get stats from each system
+    // Map<String, Object> cmsStats = cmsService.getSystemStats();
+    // Map<String, Object> rosStats = rosService.getSystemStats();
+    // Map<String, Object> wmsStats = wmsService.getSystemStats();
+
+    // stats.put("cms", cmsStats);
+    // stats.put("ros", rosStats);
+    // stats.put("wms", wmsStats);
+    // stats.put("timestamp", System.currentTimeMillis());
+
+    // return ResponseEntity.ok(stats);
+
+    // } catch (Exception e) {
+    // logger.error("Error getting system stats: ", e);
+    // Map<String, Object> errorResponse = new HashMap<>();
+    // errorResponse.put("error", e.getMessage());
+    // return ResponseEntity.internalServerError().body(errorResponse);
+    // }
+    // }
+
+    // // 10. Emergency order cancellation
+    // @DeleteMapping("/orders/{orderId}")
+    // public ResponseEntity<Map<String, Object>> cancelOrder(@PathVariable String
+    // orderId) {
+    // logger.info("Cancelling order: {}", orderId);
+
+    // try {
+    // Map<String, Object> response = new HashMap<>();
+
+    // // Cancel in all systems
+    // String cmsResult = cmsService.cancelOrder(orderId);
+    // String rosResult = rosService.cancelRoute(orderId);
+    // String wmsResult = wmsService.cancelPackage(orderId);
+
+    // response.put("success", true);
+    // response.put("orderId", orderId);
+    // response.put("cmsResult", cmsResult);
+    // response.put("rosResult", rosResult);
+    // response.put("wmsResult", wmsResult);
+
+    // return ResponseEntity.ok(response);
+
+    // } catch (Exception e) {
+    // logger.error("Error cancelling order: ", e);
+    // Map<String, Object> errorResponse = new HashMap<>();
+    // errorResponse.put("success", false);
+    // errorResponse.put("error", e.getMessage());
+    // return ResponseEntity.internalServerError().body(errorResponse);
+    // }
+    // }
 }

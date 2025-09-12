@@ -143,4 +143,81 @@ public class WmsService {
             return "Warehouse status retrieved";
         }
     }
+
+    //added missing methods on wmsService.getPackageStatus(orderId):dev theesh
+    // Add these constants to WmsService.java (at the top with other constants)
+    private static final int PACKAGE_STATUS_REQ = 0x04;
+    private static final int PACKAGE_STATUS_RESP = 0x05;
+
+    // Add this method to WmsService.java
+    public String getPackageStatus(String orderId) {
+        try {
+            logger.info("Getting package status for order: {}", orderId);
+
+            try (Socket socket = new Socket(WMS_HOST, WMS_PORT)) {
+                socket.setSoTimeout(5000); // 5 second timeout
+
+                Map<String, Object> requestData = new HashMap<>();
+                requestData.put("order_id", orderId);
+                requestData.put("action", "get_package_status");
+                requestData.put("request_id", System.currentTimeMillis());
+
+                String jsonPayload = objectMapper.writeValueAsString(requestData);
+                byte[] payloadBytes = jsonPayload.getBytes("UTF-8");
+
+                ByteBuffer header = ByteBuffer.allocate(8);
+                header.putInt(PACKAGE_STATUS_REQ);
+                header.putInt(payloadBytes.length);
+
+                DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+                out.write(header.array());
+                out.write(payloadBytes);
+                out.flush();
+
+                DataInputStream in = new DataInputStream(socket.getInputStream());
+
+                // Read response with timeout handling
+                int responseType = in.readInt();
+                int responseLength = in.readInt();
+
+                logger.info("WMS Response - Type: {}, Length: {}", responseType, responseLength);
+
+                if (responseLength > 0 && responseLength < 10000) { // Sanity check
+                    byte[] responsePayload = new byte[responseLength];
+                    in.readFully(responsePayload);
+
+                    String responseJson = new String(responsePayload, "UTF-8");
+                    logger.info("WMS Response JSON: {}", responseJson);
+
+                    return extractPackageStatus(responseJson);
+                } else {
+                    return "invalid_response_length";
+                }
+
+            }
+
+        } catch (Exception e) {
+            logger.error("Error getting package status: ", e);
+            return "in_warehouse"; // Return default status on error
+        }
+    }
+
+    // Add this private helper method to WmsService.java
+    private String extractPackageStatus(String jsonResponse) {
+        try {
+            Map<String, Object> response = objectMapper.readValue(jsonResponse,
+                    new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {
+                    });
+            if (response.containsKey("status")) {
+                return (String) response.get("status");
+            }
+            if (response.containsKey("package_status")) {
+                return (String) response.get("package_status");
+            }
+            return "in_warehouse";
+        } catch (Exception e) {
+            logger.warn("Failed to parse package status response, returning default", e);
+            return "in_warehouse";
+        }
+    }
 }

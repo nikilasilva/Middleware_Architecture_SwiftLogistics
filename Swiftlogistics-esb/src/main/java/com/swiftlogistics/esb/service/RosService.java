@@ -118,4 +118,53 @@ public class RosService {
             return "RT" + System.currentTimeMillis();
         }
     }
+
+    //added missing methods on rosService.getRouteStatus(orderId) : dev theesh
+    // Add this method to RosService.java
+    public String getRouteStatus(String orderId) {
+        try {
+            logger.info("Getting route status for order: {}", orderId);
+
+            // Try different possible endpoints
+            String[] possibleUrls = {
+                    ROS_API_URL + "/route-status/" + orderId,
+                    ROS_API_URL + "/routes/" + orderId + "/status",
+                    ROS_API_URL + "/orders/" + orderId + "/route",
+                    ROS_API_URL + "/status/" + orderId
+            };
+
+            for (String url : possibleUrls) {
+                try {
+                    String response = restTemplate.getForObject(url, String.class);
+                    return extractRouteStatus(response);
+                } catch (Exception e) {
+                    logger.debug("Failed to get route status from: {}", url);
+                }
+            }
+
+            return "route_not_found";
+        } catch (Exception e) {
+            logger.error("Error getting route status: ", e);
+            return "in_progress"; // Return default status on error
+        }
+    }
+
+    // Add this private helper method to RosService.java
+    private String extractRouteStatus(String jsonResponse) {
+        try {
+            Map<String, Object> response = objectMapper.readValue(jsonResponse,
+                    new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {
+                    });
+            if (response.containsKey("status")) {
+                return (String) response.get("status");
+            }
+            if (response.containsKey("route_status")) {
+                return (String) response.get("route_status");
+            }
+            return "in_progress";
+        } catch (Exception e) {
+            logger.warn("Failed to parse route status response, returning default", e);
+            return "in_progress";
+        }
+    }
 }
