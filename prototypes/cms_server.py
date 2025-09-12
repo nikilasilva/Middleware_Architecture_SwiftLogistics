@@ -81,11 +81,66 @@ def soap_endpoint():
             return handle_get_client_info(soap_body)
         elif operation == "UpdateBilling":
             return handle_update_billing(soap_body)
+        elif operation == "CancelOrder":
+            return handle_cancel_order(soap_body)
         else:
             return create_soap_fault(f"Unknown operation: {operation}"), 400
-
     except Exception as e:
         return create_soap_fault(f"Server error: {str(e)}"), 500
+
+
+def handle_cancel_order(soap_body):
+    """Handle order cancellation"""
+    print("Orders in system:", orders.keys())
+    try:
+        # Try to find OrderId with or without namespace
+        order_id_elem = soap_body.find("cms:OrderId", NAMESPACES)
+        if order_id_elem is None:
+            order_id_elem = soap_body.find("OrderId")
+        if order_id_elem is None or not order_id_elem.text:
+            return create_soap_fault("Missing OrderId in CancelOrder request"), 400
+
+        external_order_id = order_id_elem.text.strip()
+        print(f"[CMS] Looking for external order ID: {external_order_id}")
+        
+        # Find order by external_order_id or internal order_id
+        found_order_id = None
+        for internal_id, order in orders.items():
+            print(f"[CMS] Checking order {internal_id}, external_id: {order.get('external_order_id')}")
+            if (order.get("external_order_id") == external_order_id or 
+                internal_id == external_order_id):
+                found_order_id = internal_id
+                break
+
+        if not found_order_id:
+            print(f"[CMS] Order not found for external ID: {external_order_id}")
+            return create_soap_fault(f"Order not found for ID: {external_order_id}"), 404
+
+        # Cancel the order
+        orders[found_order_id]["status"] = "CANCELLED"
+        orders[found_order_id]["cancelled_at"] = datetime.now().isoformat()
+
+        response_body = f"""
+        <cms:CancelOrderResponse>
+            <cms:CancelResult>{external_order_id}</cms:CancelResult>
+            <cms:Status>CANCELLED</cms:Status>
+            <cms:Message>Order cancelled successfully</cms:Message>
+        </cms:CancelOrderResponse>"""
+
+        response = Response(
+            create_soap_response(response_body),
+            mimetype="text/xml",
+            headers={"SOAPAction": "CancelOrderResponse"},
+        )
+        print(f"[CMS] Order cancelled via SOAP: {found_order_id} (external: {external_order_id})")
+        return response
+    except Exception as e:
+        print(f"[CMS] ERROR in handle_cancel_order: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return create_soap_fault(f"Error cancelling order: {str(e)}"), 500
+
+    
 
 
 def handle_create_order(soap_body):
@@ -119,6 +174,7 @@ def handle_create_order(soap_body):
         )
         recipient_phone_elem = find_element_with_namespace(soap_body, "RecipientPhone")
         package_details_elem = find_element_with_namespace(soap_body, "PackageDetails")
+        order_id_elem = find_element_with_namespace(soap_body, "OrderId")  # Get external order ID
 
         print(f"[CMS] DEBUG: Elements found:")
         print(
@@ -176,11 +232,14 @@ def handle_create_order(soap_body):
             )
             return create_soap_fault("Invalid client ID"), 400
 
-        # Generate order ID
-        order_id = f"ORD{datetime.now().strftime('%Y%m%d')}{len(orders)+1:04d}"
+        # Generate internal order ID
+        internal_order_id = f"ORD{datetime.now().strftime('%Y%m%d')}{len(orders)+1:04d}"
+        
+        # Use provided external order ID or generate one
+        external_order_id = order_id_elem.text.strip() if order_id_elem is not None and order_id_elem.text else internal_order_id
 
         # Create order
-        orders[order_id] = {
+        orders[internal_order_id] = {
             "client_id": client_id,
             "recipient_name": recipient_name,
             "recipient_address": recipient_address,
@@ -189,11 +248,13 @@ def handle_create_order(soap_body):
             "status": "PENDING",
             "created_at": datetime.now().isoformat(),
             "billing_amount": clients[client_id]["billing_rate"],
+            "external_order_id": external_order_id,  # Store the external order ID
         }
 
         response_body = f"""
         <cms:CreateOrderResponse>
-            <cms:OrderId>{order_id}</cms:OrderId>
+            <cms:OrderId>{external_order_id}</cms:OrderId>
+            <cms:InternalOrderId>{internal_order_id}</cms:InternalOrderId>
             <cms:Status>SUCCESS</cms:Status>
             <cms:Message>Order created successfully</cms:Message>
             <cms:EstimatedCost>{clients[client_id]["billing_rate"]}</cms:EstimatedCost>
@@ -205,7 +266,7 @@ def handle_create_order(soap_body):
             headers={"SOAPAction": "CreateOrderResponse"},
         )
 
-        print(f"[CMS] Order created: {order_id} for client {client_id}")
+        print(f"[CMS] Order created: {internal_order_id} (external: {external_order_id}) for client {client_id}")
         return response
 
     except Exception as e:
