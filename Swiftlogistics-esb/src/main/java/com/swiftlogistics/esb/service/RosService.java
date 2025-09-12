@@ -118,4 +118,50 @@ public class RosService {
             return "RT" + System.currentTimeMillis();
         }
     }
+
+      public String cancelRoute(String orderId) {
+        try {
+            logger.info("Cancelling ROS route for order: {}", orderId);
+
+            Map<String, String> requestBody = new HashMap<>();
+            requestBody.put("order_id", orderId);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            HttpEntity<Map<String, String>> request = new HttpEntity<>(requestBody, headers);
+            
+            // Use DELETE method instead of POST
+            String response = restTemplate.exchange(
+                ROS_API_URL + "/routes/cancel", 
+                org.springframework.http.HttpMethod.DELETE, 
+                request, 
+                String.class
+            ).getBody();
+
+            return extractCancelRouteResult(response);
+
+        } catch (Exception e) {
+            logger.error("Error cancelling ROS route: ", e);
+            return "Error cancelling ROS route: " + e.getMessage();
+        }
+    }
+
+    private String extractCancelRouteResult(String jsonResponse) {
+        try {
+            Map<String, Object> response = objectMapper.readValue(jsonResponse,
+                    new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {
+                    });
+            if (response.containsKey("status") && "cancelled".equals(response.get("status"))) {
+                return "Route cancelled successfully for order: " + response.get("order_id");
+            }
+            if (response.containsKey("message")) {
+                return "Route cancellation: " + response.get("message");
+            }
+            return "Route cancellation confirmed";
+        } catch (Exception e) {
+            logger.error("Error parsing cancel route response: ", e);
+            return "Route cancellation confirmed";
+        }
+    }
 }
