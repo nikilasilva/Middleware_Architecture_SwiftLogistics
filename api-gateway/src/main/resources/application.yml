@@ -1,0 +1,67 @@
+server:
+  port: 8089
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      routes:
+        # Order Service Routes
+        - id: order-service
+          uri: lb://order-service
+          predicates:
+            - Path=/api/orders/**
+
+        # Client Service Routes
+        - id: client-service
+          uri: lb://client-service
+          predicates:
+            - Path=/api/clients/**
+
+        # ESB Direct Access Routes
+        - id: esb-service
+          uri: lb://esb-service
+          predicates:
+            - Path=/esb/**
+
+      # Global CORS configuration
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+
+      # Discovery configuration
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+
+# Eureka Configuration
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+
+# Management endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway,routes
+
+logging:
+  level:
+    root: INFO
+    org.springframework.cloud.gateway: INFO
