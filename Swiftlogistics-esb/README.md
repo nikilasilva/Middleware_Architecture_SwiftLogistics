@@ -12,3 +12,14 @@ Run:
 
 Or with Docker compose:
   docker-compose up --build
+
+Theesh Testing using curl
+Method 3 : 
+curl -X GET "http://localhost:8084/orders/ORD001/status" \
+     -H "Content-Type: application/json"
+
+output : 
+{"orderId":"ORD001","cmsStatus":"processing","routeStatus":"route_not_found","packageStatus":"in_warehouse","timestamp":1757702152846}
+
+Method 4 :
+
