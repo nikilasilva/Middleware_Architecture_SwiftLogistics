@@ -24,7 +24,7 @@ public class WmsService {
     private static final int PACKAGE_RECEIVED = 0x01;
     // added by theesh
     private static final int PACKAGE_STATUS_REQ = 0x04;
-    private static final int PACKAGE_STATUS_RESP = 0x05;
+    // private static final int PACKAGE_STATUS_RESP = 0x05;
     // private static final int PACKAGE_UPDATE_REQ = 0x06;
     // private static final int PACKAGE_UPDATE_RESP = 0x07;
     private static final int PACKAGE_UPDATE_REQ = 0x08;
