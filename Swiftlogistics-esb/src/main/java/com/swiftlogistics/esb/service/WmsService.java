@@ -22,8 +22,14 @@ public class WmsService {
     private static final int WAREHOUSE_STATUS_REQ = 0x06;
     private static final int WAREHOUSE_STATUS_RESP = 0x07;
     private static final int PACKAGE_RECEIVED = 0x01;
-    // private static final int PACKAGE_STATUS_REQ = 0x04;
-    // private static final int PACKAGE_STATUS_RESP = 0x05;
+    // added by theesh
+    private static final int PACKAGE_STATUS_REQ = 0x04;
+    private static final int PACKAGE_STATUS_RESP = 0x05;
+    // private static final int PACKAGE_UPDATE_REQ = 0x06;
+    // private static final int PACKAGE_UPDATE_RESP = 0x07;
+    private static final int PACKAGE_UPDATE_REQ = 0x08;
+    private static final int PACKAGE_UPDATE_RESP = 0x09;
+    // theesh
     private static final Logger logger = LoggerFactory.getLogger(WmsService.class);
 
     private final ObjectMapper objectMapper;
@@ -146,9 +152,6 @@ public class WmsService {
 
     // added missing methods on wmsService.getPackageStatus(orderId):dev theesh
     // Add these constants to WmsService.java (at the top with other constants)
-    private static final int PACKAGE_STATUS_REQ = 0x04;
-    private static final int PACKAGE_STATUS_RESP = 0x05;
-
     // Add this method to WmsService.java
     public String getPackageStatus(String orderId) {
         try {
@@ -223,10 +226,7 @@ public class WmsService {
 
     // method 4 dev : theesh
     // Add these constants to the existing constants section
-    private static final int PACKAGE_UPDATE_REQ = 0x06;
-    private static final int PACKAGE_UPDATE_RESP = 0x07;
 
-    // Add this method to your existing WmsService class
     public String updatePackageStatus(String orderId, String status) {
         try {
             logger.info("Updating package status for order: {} to: {}", orderId, status);

@@ -135,9 +135,9 @@ public class EsbController {
     // 4. Update order status
     @PutMapping("/orders/{orderId}/status")
     public ResponseEntity<Map<String, Object>> updateOrderStatus(
-            @PathVariable String orderId,
-            @RequestParam String status,
-            @RequestParam(required = false) String system) {
+            @PathVariable("orderId") String orderId,
+            @RequestParam("status") String status,
+            @RequestParam(value = "system", required = false) String system) {
 
         logger.info("Updating order {} status to {} from system {}", orderId, status,
                 system);
@@ -163,6 +163,7 @@ public class EsbController {
             response.put("success", true);
             response.put("orderId", orderId);
             response.put("newStatus", status);
+            response.put("timestamp", System.currentTimeMillis());
 
             return ResponseEntity.ok(response);
 
@@ -171,6 +172,7 @@ public class EsbController {
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
             errorResponse.put("error", e.getMessage());
+            errorResponse.put("timestamp", System.currentTimeMillis());
             return ResponseEntity.internalServerError().body(errorResponse);
         }
     }
@@ -178,35 +180,35 @@ public class EsbController {
     // 5. Health check for all systems
     // @GetMapping("/health")
     // public ResponseEntity<Map<String, Object>> healthCheck() {
-    //     logger.info("Performing health check on all systems");
+    // logger.info("Performing health check on all systems");
 
-    //     Map<String, Object> health = new HashMap<>();
+    // Map<String, Object> health = new HashMap<>();
 
-    //     try {
-    //         // Check CMS health
-    //         boolean cmsHealthy = cmsService.isHealthy();
-    //         health.put("cms", Map.of("status", cmsHealthy ? "UP" : "DOWN"));
+    // try {
+    // // Check CMS health
+    // boolean cmsHealthy = cmsService.isHealthy();
+    // health.put("cms", Map.of("status", cmsHealthy ? "UP" : "DOWN"));
 
-    //         // Check ROS health
-    //         boolean rosHealthy = rosService.isHealthy();
-    //         health.put("ros", Map.of("status", rosHealthy ? "UP" : "DOWN"));
+    // // Check ROS health
+    // boolean rosHealthy = rosService.isHealthy();
+    // health.put("ros", Map.of("status", rosHealthy ? "UP" : "DOWN"));
 
-    //         // Check WMS health
-    //         boolean wmsHealthy = wmsService.isHealthy();
-    //         health.put("wms", Map.of("status", wmsHealthy ? "UP" : "DOWN"));
+    // // Check WMS health
+    // boolean wmsHealthy = wmsService.isHealthy();
+    // health.put("wms", Map.of("status", wmsHealthy ? "UP" : "DOWN"));
 
-    //         boolean allHealthy = cmsHealthy && rosHealthy && wmsHealthy;
-    //         health.put("overall", allHealthy ? "UP" : "DOWN");
-    //         health.put("timestamp", System.currentTimeMillis());
+    // boolean allHealthy = cmsHealthy && rosHealthy && wmsHealthy;
+    // health.put("overall", allHealthy ? "UP" : "DOWN");
+    // health.put("timestamp", System.currentTimeMillis());
 
-    //         return ResponseEntity.ok(health);
+    // return ResponseEntity.ok(health);
 
-    //     } catch (Exception e) {
-    //         logger.error("Error during health check: ", e);
-    //         health.put("overall", "DOWN");
-    //         health.put("error", e.getMessage());
-    //         return ResponseEntity.internalServerError().body(health);
-    //     }
+    // } catch (Exception e) {
+    // logger.error("Error during health check: ", e);
+    // health.put("overall", "DOWN");
+    // health.put("error", e.getMessage());
+    // return ResponseEntity.internalServerError().body(health);
+    // }
     // }
 
     // // 6. Route optimization endpoint
