@@ -11,12 +11,15 @@ import java.util.Map;
 
 @FeignClient(name = "esb-service") // This matches your ESB's spring.application.name
 public interface EsbClient {
-    
+
     // Call your existing ESB endpoints
     @GetMapping("/esb/processOrder")
-    String processOrderSimple(@RequestParam("clientId") String clientId, 
-                            @RequestParam("address") String address);
-    
-    @PostMapping("/orders")
+    String processOrderSimple(@RequestParam("clientId") String clientId,
+            @RequestParam("address") String address);
+
+    // @PostMapping("/orders")
+    // ResponseEntity<Map<String, Object>> processOrder(@RequestBody Map<String, Object> order);
+
+    @PostMapping("/orders/map")
     ResponseEntity<Map<String, Object>> processOrder(@RequestBody Map<String, Object> order);
 }
