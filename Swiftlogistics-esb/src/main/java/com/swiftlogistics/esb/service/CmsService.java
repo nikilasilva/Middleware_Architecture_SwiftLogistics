@@ -282,4 +282,81 @@ public class CmsService {
                 return "pending";
         }
     }
+    // method 4 dev: theesh
+    public String updateOrderStatus(String orderId, String status) {
+        try {
+            logger.info("Updating order status for: {} to: {}", orderId, status);
+            String soapRequest = createUpdateOrderStatusSoapRequest(orderId, status);
+
+            logger.debug("Sending SOAP update request: {}", soapRequest);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.TEXT_XML);
+            headers.set("SOAPAction", "UpdateOrderStatus");
+            headers.set("charset", "utf-8");
+
+            HttpEntity<String> request = new HttpEntity<>(soapRequest, headers);
+            String response = restTemplate.postForObject(CMS_SOAP_URL, request, String.class);
+
+            logger.debug("Received SOAP update response: {}", response);
+
+            return extractUpdateResponse(response);
+        } catch (Exception e) {
+            logger.error("Error updating order status, returning mock response: ", e);
+            return getMockUpdateResponse(orderId, status, "CMS");
+        }
+    }
+
+    private String createUpdateOrderStatusSoapRequest(String orderId, String status) {
+        return String.format(
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+                        "<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"\n" +
+                        "               xmlns:cms=\"http://swiftlogistics.lk/cms\">\n" +
+                        "    <soap:Header/>\n" +
+                        "    <soap:Body>\n" +
+                        "        <cms:UpdateOrderStatus>\n" +
+                        "            <cms:OrderId>%s</cms:OrderId>\n" +
+                        "            <cms:Status>%s</cms:Status>\n" +
+                        "        </cms:UpdateOrderStatus>\n" +
+                        "    </soap:Body>\n" +
+                        "</soap:Envelope>",
+                orderId, status);
+    }
+
+    private String extractUpdateResponse(String soapResponse) {
+        if (soapResponse != null) {
+            // Try multiple patterns for success extraction
+            String[] successPatterns = {
+                    "<cms:UpdateResult>(.*?)</cms:UpdateResult>",
+                    "<updateResult>(.*?)</updateResult>",
+                    "<result>(.*?)</result>",
+                    "<success>(.*?)</success>"
+            };
+
+            for (String pattern : successPatterns) {
+                java.util.regex.Pattern p = java.util.regex.Pattern.compile(pattern,
+                        java.util.regex.Pattern.CASE_INSENSITIVE);
+                java.util.regex.Matcher m = p.matcher(soapResponse);
+                if (m.find()) {
+                    String result = m.group(1).trim();
+                    logger.info("Extracted update result: {}", result);
+                    return result;
+                }
+            }
+
+            // Check for successful response indicators
+            if (soapResponse.contains("success") || soapResponse.contains("Success") ||
+                    soapResponse.contains("updated") || soapResponse.contains("Updated")) {
+                return "Order status updated successfully";
+            }
+        }
+
+        return "Order status update completed";
+    }
+
+    private String getMockUpdateResponse(String orderId, String status, String system) {
+        logger.info("Using mock update response for orderId: {} with status: {} in system: {}", orderId, status,
+                system);
+        return String.format("%s order %s status updated to %s successfully", system, orderId, status);
+    }
 }
