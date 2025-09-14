@@ -314,4 +314,55 @@ public class WmsService {
                 system);
         return String.format("%s package for order %s updated to %s successfully", system, orderId, status);
     }
+    // theesh : dev methd 5
+    // ...existing code...
+
+    private static final int HEALTH_CHECK_REQ = 0x10;
+    private static final int HEALTH_CHECK_RESP = 0x11;
+
+    // ...existing code...
+
+    public boolean isHealthy() {
+        try {
+            logger.info("Checking WMS health");
+
+            try (Socket socket = new Socket()) {
+                // Set a short timeout for health check
+                socket.connect(new java.net.InetSocketAddress(WMS_HOST, WMS_PORT), 3000);
+                socket.setSoTimeout(3000);
+
+                // Send a simple health check message
+                Map<String, Object> healthRequest = new HashMap<>();
+                healthRequest.put("action", "health_check");
+                healthRequest.put("timestamp", System.currentTimeMillis());
+
+                String jsonPayload = objectMapper.writeValueAsString(healthRequest);
+                byte[] payloadBytes = jsonPayload.getBytes("UTF-8");
+
+                ByteBuffer header = ByteBuffer.allocate(8);
+                header.putInt(HEALTH_CHECK_REQ);
+                header.putInt(payloadBytes.length);
+
+                DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+                out.write(header.array());
+                out.write(payloadBytes);
+                out.flush();
+
+                // Try to read response
+                DataInputStream in = new DataInputStream(socket.getInputStream());
+                int responseType = in.readInt();
+                int responseLength = in.readInt();
+
+                logger.info("WMS health check: HEALTHY (Response type: {}, length: {})", responseType, responseLength);
+                return true;
+
+            }
+
+        } catch (Exception e) {
+            logger.warn("WMS health check failed: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    // ...existing code...
 }

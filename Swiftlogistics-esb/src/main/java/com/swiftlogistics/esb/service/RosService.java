@@ -240,4 +240,42 @@ public class RosService {
                 system);
         return String.format("%s route for order %s updated to %s successfully", system, orderId, status);
     }
+    // theesh:dev
+    // filepath:
+    // d:\Middleware_Architecture_SwiftLogistics\Swiftlogistics-esb\src\main\java\com\swiftlogistics\esb\service\RosService.java
+    // ...existing code...
+
+    public boolean isHealthy() {
+        try {
+            logger.info("Checking ROS health");
+
+            // Try to access the ROS API health endpoint or base URL
+            String[] healthUrls = {
+                    ROS_API_URL + "/health",
+                    ROS_API_URL + "/status",
+                    ROS_API_URL + "/"
+            };
+
+            for (String url : healthUrls) {
+                try {
+                    String response = restTemplate.getForObject(url, String.class);
+                    if (response != null) {
+                        logger.info("ROS health check: HEALTHY");
+                        return true;
+                    }
+                } catch (Exception e) {
+                    logger.debug("Health check failed for URL: {}", url);
+                }
+            }
+
+            logger.warn("ROS health check: UNHEALTHY");
+            return false;
+
+        } catch (Exception e) {
+            logger.warn("ROS health check failed: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    // ...existing code...
 }
