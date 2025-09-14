@@ -182,9 +182,12 @@ public class EsbController {
             errorResponse.put("success", false);
             errorResponse.put("error", e.getMessage());
             errorResponse.put("timestamp", System.currentTimeMillis());
-        }
+
+            return ResponseEntity.internalServerError().body(errorResponse);
+        }      
     }
-          
+
+
     // Add Map support for Order Service
     @PostMapping("/orders/map")
     public ResponseEntity<Map<String, Object>> createOrderFromMap(@RequestBody Map<String, Object> orderData) {
@@ -244,40 +247,39 @@ public class EsbController {
         }
     }
 
+    // 5. Health check for all systems : theesh dev
+    @GetMapping("/health")
+    public ResponseEntity<Map<String, Object>> healthCheck() {
+        logger.info("Performing health check on all systems");
 
-    // 5. Health check for all systems
-    // @GetMapping("/health")
-    // public ResponseEntity<Map<String, Object>> healthCheck() {
-    // logger.info("Performing health check on all systems");
+        Map<String, Object> health = new HashMap<>();
 
-    // Map<String, Object> health = new HashMap<>();
+        try {
+            // Check CMS health
+            boolean cmsHealthy = cmsService.isHealthy();
+            health.put("cms", Map.of("status", cmsHealthy ? "UP" : "DOWN"));
 
-    // try {
-    // // Check CMS health
-    // boolean cmsHealthy = cmsService.isHealthy();
-    // health.put("cms", Map.of("status", cmsHealthy ? "UP" : "DOWN"));
+            // Check ROS health
+            boolean rosHealthy = rosService.isHealthy();
+            health.put("ros", Map.of("status", rosHealthy ? "UP" : "DOWN"));
 
-    // // Check ROS health
-    // boolean rosHealthy = rosService.isHealthy();
-    // health.put("ros", Map.of("status", rosHealthy ? "UP" : "DOWN"));
+            // Check WMS health
+            boolean wmsHealthy = wmsService.isHealthy();
+            health.put("wms", Map.of("status", wmsHealthy ? "UP" : "DOWN"));
 
-    // // Check WMS health
-    // boolean wmsHealthy = wmsService.isHealthy();
-    // health.put("wms", Map.of("status", wmsHealthy ? "UP" : "DOWN"));
+            boolean allHealthy = cmsHealthy && rosHealthy && wmsHealthy;
+            health.put("overall", allHealthy ? "UP" : "DOWN");
+            health.put("timestamp", System.currentTimeMillis());
 
-    // boolean allHealthy = cmsHealthy && rosHealthy && wmsHealthy;
-    // health.put("overall", allHealthy ? "UP" : "DOWN");
-    // health.put("timestamp", System.currentTimeMillis());
+            return ResponseEntity.ok(health);
 
-    // return ResponseEntity.ok(health);
-
-    // } catch (Exception e) {
-    // logger.error("Error during health check: ", e);
-    // health.put("overall", "DOWN");
-    // health.put("error", e.getMessage());
-    // return ResponseEntity.internalServerError().body(health);
-    // }
-    // }
+        } catch (Exception e) {
+            logger.error("Error during health check: ", e);
+            health.put("overall", "DOWN");
+            health.put("error", e.getMessage());
+            return ResponseEntity.internalServerError().body(health);
+        }
+    }
 
     // // 6. Route optimization endpoint
     // @PostMapping("/routes/optimize")

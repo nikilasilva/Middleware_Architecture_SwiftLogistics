@@ -25,13 +25,15 @@ public class WmsService {
     private static final int PACKAGE_RECEIVED = 0x01;
     // added by theesh
     private static final int PACKAGE_STATUS_REQ = 0x04;
-    // private static final int PACKAGE_STATUS_RESP = 0x05;
-    // private static final int PACKAGE_UPDATE_REQ = 0x06;
-    // private static final int PACKAGE_UPDATE_RESP = 0x07;
     private static final int PACKAGE_UPDATE_REQ = 0x08;
     private static final int PACKAGE_UPDATE_RESP = 0x09;
+    //method 5 Healthy check variables
+    private static final int HEALTH_CHECK_REQ = 0x10;
+    private static final int HEALTH_CHECK_RESP = 0x11;
+
     private static final int WMS_CANCEL_PACKAGE_REQ = 0x10;
     private static final int WMS_CANCEL_PACKAGE_RESP = 0x11;
+
     // theesh
     private static final Logger logger = LoggerFactory.getLogger(WmsService.class);
 
@@ -161,8 +163,6 @@ public class WmsService {
     }
 
     // added missing methods on wmsService.getPackageStatus(orderId):dev theesh
-    // Add these constants to WmsService.java (at the top with other constants)
-    // Add this method to WmsService.java
     public String getPackageStatus(String orderId) {
         try {
             logger.info("Getting package status for order: {}", orderId);
@@ -235,8 +235,6 @@ public class WmsService {
     }
 
     // method 4 dev : theesh
-    // Add these constants to the existing constants section
-
     public String updatePackageStatus(String orderId, String status) {
         try {
             logger.info("Updating package status for order: {} to: {}", orderId, status);
@@ -324,6 +322,48 @@ public class WmsService {
                 system);
         return String.format("%s package for order %s updated to %s successfully", system, orderId, status);
     }
+    // theesh : dev methd 5
+    public boolean isHealthy() {
+        try {
+            logger.info("Checking WMS health");
+
+            try (Socket socket = new Socket()) {
+                // Set a short timeout for health check
+                socket.connect(new java.net.InetSocketAddress(WMS_HOST, WMS_PORT), 3000);
+                socket.setSoTimeout(3000);
+
+                // Send a simple health check message
+                Map<String, Object> healthRequest = new HashMap<>();
+                healthRequest.put("action", "health_check");
+                healthRequest.put("timestamp", System.currentTimeMillis());
+
+                String jsonPayload = objectMapper.writeValueAsString(healthRequest);
+                byte[] payloadBytes = jsonPayload.getBytes("UTF-8");
+
+                ByteBuffer header = ByteBuffer.allocate(8);
+                header.putInt(HEALTH_CHECK_REQ);
+                header.putInt(payloadBytes.length);
+
+                DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+                out.write(header.array());
+                out.write(payloadBytes);
+                out.flush();
+
+                // Try to read response
+                DataInputStream in = new DataInputStream(socket.getInputStream());
+                int responseType = in.readInt();
+                int responseLength = in.readInt();
+
+                logger.info("WMS health check: HEALTHY (Response type: {}, length: {})", responseType, responseLength);
+                return true;
+
+            }
+
+        } catch (Exception e) {
+            logger.warn("WMS health check failed: {}", e.getMessage());
+            return false;
+        }
+    }
 
     private String extractCancelPackageResult(String jsonResponse) {
         try {
@@ -407,5 +447,6 @@ public class WmsService {
         // Fallback: generate a package ID if no mapping exists
         logger.warn("No stored mapping found for order ID: {}, generating fallback package ID", orderId);
         return "PKG" + Math.abs(orderId.hashCode());
+
     }
 }
