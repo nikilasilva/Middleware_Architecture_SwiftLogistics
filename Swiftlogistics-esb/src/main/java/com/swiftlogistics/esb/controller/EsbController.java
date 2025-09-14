@@ -182,7 +182,10 @@ public class EsbController {
             errorResponse.put("success", false);
             errorResponse.put("error", e.getMessage());
             errorResponse.put("timestamp", System.currentTimeMillis());
-          
+            return ResponseEntity.internalServerError().body(errorResponse);
+        }      
+    }
+
     // Add Map support for Order Service
     @PostMapping("/orders/map")
     public ResponseEntity<Map<String, Object>> createOrderFromMap(@RequestBody Map<String, Object> orderData) {
