@@ -22,6 +22,8 @@ MESSAGE_TYPES = {
     "PACKAGE_STATUS_RESP": 0x05,
     "WAREHOUSE_STATUS_REQ": 0x06,
     "WAREHOUSE_STATUS_RESP": 0x07,
+    "WMS_CANCEL_PACKAGE_REQ": 0x10,
+    "WMS_CANCEL_PACKAGE_RESP": 0x11,
     "HEARTBEAT": 0x08,
     "ERROR": 0xFF,
 }
@@ -60,6 +62,7 @@ class WMSServer:
             {
                 "package_id": "PKG001",
                 "order_id": "ORD20250101001",
+                "external_order_id": "TEST-001",  # Add external order mapping
                 "client_id": "CLIENT001",
                 "status": PackageStatus.READY_FOR_LOADING.value,
                 "zone": "A",
@@ -71,6 +74,7 @@ class WMSServer:
             {
                 "package_id": "PKG002",
                 "order_id": "ORD20250101002",
+                "external_order_id": "TEST-002",  # Add external order mapping
                 "client_id": "CLIENT002",
                 "status": PackageStatus.PROCESSING.value,
                 "zone": "B",
@@ -82,6 +86,7 @@ class WMSServer:
             {
                 "package_id": "PKG003",
                 "order_id": "ORD20250101003",
+                "external_order_id": "TEST-003",  # Add external order mapping
                 "client_id": "CLIENT001",
                 "status": PackageStatus.LOADED.value,
                 "zone": "C",
@@ -201,6 +206,12 @@ class WMSServer:
 
             elif message_type == MESSAGE_TYPES["HEARTBEAT"]:
                 self.handle_heartbeat(client_socket, payload_data)
+
+            elif message_type == MESSAGE_TYPES["WMS_CANCEL_PACKAGE_REQ"]:
+                self.handle_cancel_package_request(client_socket, payload_data)
+
+            elif message_type == MESSAGE_TYPES["WMS_CANCEL_PACKAGE_RESP"]:
+                self.handle_cancel_package_response(client_socket, payload_data)
 
             else:
                 self.send_error(client_socket, f"Unknown message type: {message_type}")
@@ -425,6 +436,74 @@ class WMSServer:
 
         except Exception as e:
             self.send_error(client_socket, f"Heartbeat error: {str(e)}")
+    
+
+    def handle_cancel_package_request(self, client_socket, payload_data):
+        """Handle cancel package request"""
+        try:
+            data = json.loads(payload_data.decode("utf-8"))
+            # Accept both package_id and order_id from ESB
+            package_id = data.get("package_id")
+            order_id = data.get("order_id")
+            
+            # Use order_id if package_id is not provided (for ESB compatibility)
+            search_id = package_id if package_id else order_id
+
+            if not search_id:
+                self.send_error(client_socket, "Missing package_id or order_id for cancel request")
+                return
+
+            # Find package by package_id, order_id, or external_order_id
+            found_package_id = None
+            for pkg_id, package in self.packages.items():
+                if (pkg_id == search_id or 
+                    package.get("order_id") == search_id or 
+                    package.get("external_order_id") == search_id):
+                    found_package_id = pkg_id
+                    break
+
+            if not found_package_id:
+                self.send_error(client_socket, f"Package not found for ID: {search_id}")
+                return
+
+            # Mark package as cancelled
+            package = self.packages[found_package_id]
+            previous_status = package["status"]
+            package["status"] = "CANCELLED"
+            package["cancelled_at"] = datetime.now().isoformat()
+            package["last_updated"] = datetime.now().isoformat()
+
+            # Remove from zone if present
+            zone = package.get("zone")
+            if zone and zone in self.warehouse_zones:
+                if found_package_id in self.warehouse_zones[zone]["packages"]:
+                    self.warehouse_zones[zone]["packages"].remove(found_package_id)
+                    self.warehouse_zones[zone]["current"] = max(0, self.warehouse_zones[zone]["current"] - 1)
+
+            response_data = {
+                "package_id": found_package_id,
+                "order_id": package.get("external_order_id", package.get("order_id")),  # Return external order ID for ESB
+                "status": "CANCELLED",
+                "previous_status": previous_status,
+                "message": "Package cancelled successfully"
+            }
+            self.send_response(client_socket, MESSAGE_TYPES["WMS_CANCEL_PACKAGE_RESP"], response_data)
+            print(f"[WMS] Package cancelled: {found_package_id} (search ID: {search_id})")
+
+            # Broadcast update
+            self.broadcast_package_update(package)
+
+        except Exception as e:
+            self.send_error(client_socket, f"Cancel package request error: {str(e)}")
+
+    def handle_cancel_package_response(self, client_socket, payload_data):
+        """Handle cancel package response (no-op or log)"""
+        try:
+            data = json.loads(payload_data.decode("utf-8"))
+            package_id = data.get("package_id")
+            print(f"[WMS] Cancel package response received for package: {package_id}")
+        except Exception as e:
+            print(f"[WMS] Error handling cancel package response: {e}")
 
     def send_response(self, client_socket, message_type, data):
         """Send response to client"""
