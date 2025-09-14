@@ -104,12 +104,13 @@ public class CmsService {
                         "            <cms:ClientId>%s</cms:ClientId>\n" +
                         "            <cms:RecipientName>Customer</cms:RecipientName>\n" +
                         "            <cms:RecipientAddress>%s</cms:RecipientAddress>\n" +
+                        "            <cms:OrderId>%s</cms:OrderId>\n" +
                         "            <cms:RecipientPhone>0771234567</cms:RecipientPhone>\n" +
                         "            <cms:PackageDetails>Package for %s</cms:PackageDetails>\n" +
                         "        </cms:CreateOrder>\n" +
                         "    </soap:Body>\n" +
                         "</soap:Envelope>\n",
-                order.getClientId(), order.getDeliveryAddress(), order.getOrderId());
+            order.getClientId(), order.getDeliveryAddress(), order.getOrderId(), order.getOrderId());
     }
 
     private String extractClientInfo(String soapResponse) {
@@ -411,6 +412,7 @@ public class CmsService {
         return String.format("%s order %s status updated to %s successfully (mock response)", system, orderId, status);
     }
 
+
     // theesh: dev
     public boolean isHealthy() {
         try {
@@ -446,5 +448,53 @@ public class CmsService {
                 "        <HealthCheck/>\n" +
                 "    </soap:Body>\n" +
                 "</soap:Envelope>";
+
+    public String cancelOrder(String orderId) {
+        try {
+            logger.info("Cancelling CMS order: {}", orderId);
+            
+            String soapRequest = createCancelOrderSoapRequest(orderId); // implement SOAP XML
+            logger.info("SOAP Request: {}", soapRequest);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.TEXT_XML);
+            headers.set("SOAPAction", "CancelOrder");
+
+            HttpEntity<String> request = new HttpEntity<>(soapRequest, headers);
+            String response = restTemplate.postForObject(CMS_SOAP_URL, request, String.class);
+
+            return extractCancelOrderResult(response); // parse SOAP response
+        } catch (Exception e) {
+            logger.error("Error cancelling CMS order: ", e);
+            return "Error cancelling CMS order: " + e.getMessage();
+        }
+    }
+
+    private String createCancelOrderSoapRequest(String orderId) {
+        return String.format(
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+                        "<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"\n" +
+                        "               xmlns:cms=\"http://swiftlogistics.lk/cms\">\n" +
+                        "    <soap:Header/>\n" +
+                        "    <soap:Body>\n" +
+                        "        <cms:CancelOrder>\n" +
+                        "            <cms:OrderId>%s</cms:OrderId>\n" +
+                        "        </cms:CancelOrder>\n" +
+                        "    </soap:Body>\n" +
+                        "</soap:Envelope>\n",
+                orderId);
+    }
+
+    private String extractCancelOrderResult(String soapResponse) {
+        if (soapResponse != null && soapResponse.contains("<cms:CancelResult>")) {
+            int start = soapResponse.indexOf("<cms:CancelResult>") + 18;
+            int end = soapResponse.indexOf("</cms:CancelResult>");
+            if (end > start) {
+                String result = soapResponse.substring(start, end);
+                return "Order cancelled successfully: " + result;
+            }
+        }
+        return "Order cancellation confirmed";
+
     }
 }

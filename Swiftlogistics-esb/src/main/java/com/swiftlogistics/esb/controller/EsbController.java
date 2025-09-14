@@ -182,9 +182,11 @@ public class EsbController {
             errorResponse.put("success", false);
             errorResponse.put("error", e.getMessage());
             errorResponse.put("timestamp", System.currentTimeMillis());
+
             return ResponseEntity.internalServerError().body(errorResponse);
         }      
     }
+
 
     // Add Map support for Order Service
     @PostMapping("/orders/map")
@@ -393,36 +395,34 @@ public class EsbController {
     // }
     // }
 
-    // // 10. Emergency order cancellation
-    // @DeleteMapping("/orders/{orderId}")
-    // public ResponseEntity<Map<String, Object>> cancelOrder(@PathVariable String
-    // orderId) {
-    // logger.info("Cancelling order: {}", orderId);
+   // 10. Emergency order cancellation with smart ID mapping
+    @DeleteMapping("/orders/cancel")
+    public ResponseEntity<Map<String, Object>> cancelOrder(@RequestParam("orderId") String orderId) {
 
-    // try {
-    // Map<String, Object> response = new HashMap<>();
+            try {
+            Map<String, Object> response = new HashMap<>();
 
-    // // Cancel in all systems
-    // String cmsResult = cmsService.cancelOrder(orderId);
-    // String rosResult = rosService.cancelRoute(orderId);
-    // String wmsResult = wmsService.cancelPackage(orderId);
+            // Cancel in all systems
+            String cmsResult = cmsService.cancelOrder(orderId);
+            String rosResult = rosService.cancelRoute(orderId);
+            String wmsResult = wmsService.cancelPackage(orderId);
 
-    // response.put("success", true);
-    // response.put("orderId", orderId);
-    // response.put("cmsResult", cmsResult);
-    // response.put("rosResult", rosResult);
-    // response.put("wmsResult", wmsResult);
+            response.put("success", true);
+            response.put("orderId", orderId);
+            response.put("cmsResult", cmsResult);
+            response.put("rosResult", rosResult);
+            response.put("wmsResult", wmsResult);
 
-    // return ResponseEntity.ok(response);
+            return ResponseEntity.ok(response);
 
-    // } catch (Exception e) {
-    // logger.error("Error cancelling order: ", e);
-    // Map<String, Object> errorResponse = new HashMap<>();
-    // errorResponse.put("success", false);
-    // errorResponse.put("error", e.getMessage());
-    // return ResponseEntity.internalServerError().body(errorResponse);
-    // }
-    // }
+        } catch (Exception e) {
+            logger.error("Error cancelling order: ", e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", e.getMessage());
+            return ResponseEntity.internalServerError().body(errorResponse);
+        }
+    }
 
     // 🚀 RabbitMQ Event Publisher
     private void publishOrderCreatedEvent(DeliveryOrder order, Map<String, Object> processingResult) {
