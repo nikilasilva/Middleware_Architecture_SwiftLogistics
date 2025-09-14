@@ -3,7 +3,9 @@ package com.example.order_service.client;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
@@ -18,8 +20,24 @@ public interface EsbClient {
             @RequestParam("address") String address);
 
     // @PostMapping("/orders")
-    // ResponseEntity<Map<String, Object>> processOrder(@RequestBody Map<String, Object> order);
+    // ResponseEntity<Map<String, Object>> processOrder(@RequestBody Map<String,
+    // Object> order);
 
     @PostMapping("/orders/map")
     ResponseEntity<Map<String, Object>> processOrder(@RequestBody Map<String, Object> order);
+
+    // NEW: Get order status from ESB
+    @GetMapping("/orders/{orderId}/status")
+    ResponseEntity<Map<String, Object>> getOrderStatus(@PathVariable("orderId") String orderId);
+
+    // NEW: Update order status in ESB
+    @PutMapping("/orders/{orderId}/status")
+    ResponseEntity<Map<String, Object>> updateOrderStatus(
+            @PathVariable("orderId") String orderId,
+            @RequestParam("status") String status,
+            @RequestParam(value = "system", required = false) String system);
+
+    // NEW: Check ESB health
+    @GetMapping("/health")
+    ResponseEntity<Map<String, Object>> checkHealth();
 }

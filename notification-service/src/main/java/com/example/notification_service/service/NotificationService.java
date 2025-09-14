@@ -25,6 +25,17 @@ public class NotificationService {
             sendOrderConfirmationNotification(orderId, clientId, deliveryAddress, orderEvent);
         }
     }
+    // NEW: Handle order status update events
+    @RabbitListener(queues = "order.status.queue")
+    public void handleOrderStatusUpdate(Map<String, Object> statusEvent) {
+        logger.info("📊 Received order status update event: {}", statusEvent);
+
+        String orderId = (String) statusEvent.get("orderId");
+        String newStatus = (String) statusEvent.get("newStatus");
+        String system = (String) statusEvent.get("system");
+
+        sendOrderStatusUpdateNotification(orderId, newStatus, system, statusEvent);
+    }
 
     private void sendOrderConfirmationNotification(String orderId, String clientId, String deliveryAddress,
             Map<String, Object> orderDetails) {
@@ -40,6 +51,23 @@ public class NotificationService {
 
         } catch (InterruptedException e) {
             logger.error("❌ Failed to send notification for order: {}", orderId, e);
+        }
+    }
+
+    // NEW: Handle status update notifications
+    private void sendOrderStatusUpdateNotification(String orderId, String newStatus, String system,
+            Map<String, Object> statusDetails) {
+        logger.info("📨 Sending status update notification for order {} - new status: {}", orderId, newStatus);
+
+        try {
+            Thread.sleep(1000); // Simulate notification processing
+
+            logger.info("✅ STATUS UPDATE EMAIL: Order {} status changed to {} in {}", orderId, newStatus, system);
+            logger.info("📱 STATUS UPDATE SMS: Your order {} is now {}", orderId, newStatus);
+            logger.info("🔔 STATUS UPDATE PUSH: Order {} - {}", orderId, newStatus);
+
+        } catch (InterruptedException e) {
+            logger.error("❌ Failed to send status update notification for order: {}", orderId, e);
         }
     }
 
