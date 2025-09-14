@@ -34,7 +34,7 @@ output :
 {"rosUpdate":"ROS route for order ORD001 updated to shipped successfully","newStatus":"shipped","orderId":"ORD001","success":true,"wmsUpdate":"Unknown package update response type: 8","cmsUpdate":"CMS order ORD001 status updated to shipped successfully (mock response)","timestamp":1757735485904}
 
 Method 5 :
-$ curl -X GET "http://localhost:8084/health" -H "Content-Type: application/json" -v
+curl -X GET "http://localhost:8084/health" -H "Content-Type: application/json" -v
 
 Note: Unnecessary use of -X or --request,
 Note: GET is already inferred.

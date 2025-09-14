@@ -412,8 +412,6 @@ public class CmsService {
     }
 
     // theesh: dev
-    // ...existing code...
-
     public boolean isHealthy() {
         try {
             logger.info("Checking CMS health");
@@ -449,6 +447,4 @@ public class CmsService {
                 "    </soap:Body>\n" +
                 "</soap:Envelope>";
     }
-
-    // ...existing code...
 }

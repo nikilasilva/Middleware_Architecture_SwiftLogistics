@@ -241,10 +241,6 @@ public class RosService {
         return String.format("%s route for order %s updated to %s successfully", system, orderId, status);
     }
     // theesh:dev
-    // filepath:
-    // d:\Middleware_Architecture_SwiftLogistics\Swiftlogistics-esb\src\main\java\com\swiftlogistics\esb\service\RosService.java
-    // ...existing code...
-
     public boolean isHealthy() {
         try {
             logger.info("Checking ROS health");
@@ -276,6 +272,4 @@ public class RosService {
             return false;
         }
     }
-
-    // ...existing code...
 }

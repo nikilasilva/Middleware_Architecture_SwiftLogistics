@@ -29,6 +29,9 @@ public class WmsService {
     // private static final int PACKAGE_UPDATE_RESP = 0x07;
     private static final int PACKAGE_UPDATE_REQ = 0x08;
     private static final int PACKAGE_UPDATE_RESP = 0x09;
+    //method 5 Healthy check variables
+    private static final int HEALTH_CHECK_REQ = 0x10;
+    private static final int HEALTH_CHECK_RESP = 0x11;
     // theesh
     private static final Logger logger = LoggerFactory.getLogger(WmsService.class);
 
@@ -151,8 +154,6 @@ public class WmsService {
     }
 
     // added missing methods on wmsService.getPackageStatus(orderId):dev theesh
-    // Add these constants to WmsService.java (at the top with other constants)
-    // Add this method to WmsService.java
     public String getPackageStatus(String orderId) {
         try {
             logger.info("Getting package status for order: {}", orderId);
@@ -225,8 +226,6 @@ public class WmsService {
     }
 
     // method 4 dev : theesh
-    // Add these constants to the existing constants section
-
     public String updatePackageStatus(String orderId, String status) {
         try {
             logger.info("Updating package status for order: {} to: {}", orderId, status);
@@ -315,13 +314,6 @@ public class WmsService {
         return String.format("%s package for order %s updated to %s successfully", system, orderId, status);
     }
     // theesh : dev methd 5
-    // ...existing code...
-
-    private static final int HEALTH_CHECK_REQ = 0x10;
-    private static final int HEALTH_CHECK_RESP = 0x11;
-
-    // ...existing code...
-
     public boolean isHealthy() {
         try {
             logger.info("Checking WMS health");
@@ -363,6 +355,4 @@ public class WmsService {
             return false;
         }
     }
-
-    // ...existing code...
 }
