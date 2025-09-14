@@ -75,7 +75,7 @@ class EsbControllerHealthCheckTest {
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cms.status").value("UP"))
-                .andExpected(jsonPath("$.ros.status").value("DOWN"))
+                .andExpect(jsonPath("$.ros.status").value("DOWN"))
                 .andExpect(jsonPath("$.wms.status").value("UP"))
                 .andExpect(jsonPath("$.overall").value("DOWN"))
                 .andExpect(jsonPath("$.timestamp").exists())
