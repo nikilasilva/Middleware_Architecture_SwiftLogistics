@@ -110,7 +110,7 @@ public class CmsService {
                         "        </cms:CreateOrder>\n" +
                         "    </soap:Body>\n" +
                         "</soap:Envelope>\n",
-            order.getClientId(), order.getDeliveryAddress(), order.getOrderId(), order.getOrderId());
+                order.getClientId(), order.getDeliveryAddress(), order.getOrderId(), order.getOrderId());
     }
 
     private String extractClientInfo(String soapResponse) {
@@ -412,7 +412,6 @@ public class CmsService {
         return String.format("%s order %s status updated to %s successfully (mock response)", system, orderId, status);
     }
 
-
     // theesh: dev
     public boolean isHealthy() {
         try {
@@ -448,11 +447,12 @@ public class CmsService {
                 "        <HealthCheck/>\n" +
                 "    </soap:Body>\n" +
                 "</soap:Envelope>";
+    }
 
     public String cancelOrder(String orderId) {
         try {
             logger.info("Cancelling CMS order: {}", orderId);
-            
+
             String soapRequest = createCancelOrderSoapRequest(orderId); // implement SOAP XML
             logger.info("SOAP Request: {}", soapRequest);
 
