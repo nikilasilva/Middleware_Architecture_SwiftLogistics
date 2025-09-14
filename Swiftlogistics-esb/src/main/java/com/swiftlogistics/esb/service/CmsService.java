@@ -410,4 +410,45 @@ public class CmsService {
                 system);
         return String.format("%s order %s status updated to %s successfully (mock response)", system, orderId, status);
     }
+
+    // theesh: dev
+    // ...existing code...
+
+    public boolean isHealthy() {
+        try {
+            logger.info("Checking CMS health");
+
+            // Try a simple SOAP request to check if CMS is responding
+            String testRequest = createHealthCheckSoapRequest();
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.TEXT_XML);
+            headers.set("SOAPAction", "HealthCheck");
+            headers.set("charset", "utf-8");
+
+            HttpEntity<String> request = new HttpEntity<>(testRequest, headers);
+
+            // Set a short timeout for health check
+            restTemplate.getForObject(CMS_SOAP_URL, String.class);
+
+            logger.info("CMS health check: HEALTHY");
+            return true;
+
+        } catch (Exception e) {
+            logger.warn("CMS health check failed: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    private String createHealthCheckSoapRequest() {
+        return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+                "<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n" +
+                "    <soap:Header/>\n" +
+                "    <soap:Body>\n" +
+                "        <HealthCheck/>\n" +
+                "    </soap:Body>\n" +
+                "</soap:Envelope>";
+    }
+
+    // ...existing code...
 }
