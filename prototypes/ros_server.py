@@ -273,6 +273,39 @@ def get_vehicle(vehicle_id):
     return jsonify({"success": True, "vehicle": vehicle})
 
 
+
+@app.route("/api/v1/routes/cancel", methods=["DELETE"])
+def cancel_route_by_order():
+    """Cancel a route by order_id (for ESB integration)"""
+    try:
+        data = request.get_json()
+        order_id = data.get("order_id")
+        if not order_id:
+            return jsonify({"status": "error", "message": "Missing order_id"}), 400
+
+        # Find the route containing this order_id in its stops
+        for route in routes.values():
+            for stop in route.get("optimized_stops", []):
+                if stop.get("order_id") == order_id:
+                    # Cancel the route
+                    route["status"] = "cancelled"
+                    route["updated_at"] = datetime.now().isoformat()
+                    # Update vehicle status if needed
+                    vehicle_id = route["vehicle_id"]
+                    if vehicle_id in vehicles:
+                        vehicles[vehicle_id]["status"] = "available"
+                        vehicles[vehicle_id].pop("current_route", None)
+                    return jsonify({
+                        "status": "cancelled",
+                        "order_id": order_id,
+                        "route_id": route["route_id"],
+                        "message": f"Route cancelled for order {order_id}"
+                    })
+        return jsonify({"status": "error", "message": f"No route found for order_id {order_id}"}), 404
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Cancellation failed: {str(e)}"}), 500
+
+
 @app.route("/api/v1/vehicles/<vehicle_id>/location", methods=["PUT"])
 def update_vehicle_location(vehicle_id):
     """Update vehicle location"""
@@ -430,6 +463,7 @@ if __name__ == "__main__":
     print("Health Check: http://localhost:5002/api/v1/health")
     print("Available endpoints:")
     print("  POST /api/v1/routes/optimize - Create optimized route")
+    print("  DELETE /api/v1/routes/cancel - Delete optimized route")
     print("  GET  /api/v1/routes/<id> - Get route details")
     print("  PUT  /api/v1/routes/<id>/status - Update route status")
     print("  GET  /api/v1/vehicles - Get all vehicles")
