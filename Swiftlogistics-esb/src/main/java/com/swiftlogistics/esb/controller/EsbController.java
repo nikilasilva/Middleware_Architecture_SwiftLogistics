@@ -177,7 +177,7 @@ public class EsbController {
         }
     }
 
-    // 5. Health check for all systems
+    // 5. Health check for all systems : theesh dev
     @GetMapping("/health")
     public ResponseEntity<Map<String, Object>> healthCheck() {
         logger.info("Performing health check on all systems");
