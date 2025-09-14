@@ -55,5 +55,10 @@ Note: GET is already inferred.
   < Content-Type: application/json
   < Transfer-Encoding: chunked
   < Date: Sun, 14 Sep 2025 03:47:33 GMT
-  
+
   {"ros":{"status":"UP"},"cms":{"status":"DOWN"},"overall":"DOWN","wms":{"status":"UP"},"timestamp":1757821652999}\* Connection #0 to host localhost left intact
+
+  curl -X GET "http://localhost:8084/health" \
+  -H "Content-Type: application/json" \  
+   --max-time 10
+  {"ros":{"status":"UP"},"cms":{"status":"DOWN"},"overall":"DOWN","wms":{"status":"UP"},"timestamp":1757822333528}
