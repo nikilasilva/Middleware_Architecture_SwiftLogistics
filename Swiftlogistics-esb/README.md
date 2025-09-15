@@ -152,26 +152,6 @@ Error: 404 NOT FOUND: Client not found
 - `CLIENT001` (TechMart Electronics)
 - `CLIENT002` (Fashion Hub Lanka)
 
-#### 3. RabbitMQ Message Conversion Errors
-```
-Error: Cannot convert from [[B] to [java.util.Map]
-```
-**Solution:** Configure RabbitMQ message converter properly:
-
-```java
-// Add to RabbitConfig.java
-@Bean
-public Jackson2JsonMessageConverter messageConverter() {
-    return new Jackson2JsonMessageConverter();
-}
-
-@Bean
-public RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory) {
-    RabbitTemplate template = new RabbitTemplate(connectionFactory);
-    template.setMessageConverter(messageConverter());
-    return template;
-}
-```
 
 #### 4. Package Tracking Method Missing
 ```
@@ -294,11 +274,11 @@ curl -X POST "http://localhost:8084/routes/optimize" \
      }'
 
 # ✅ Route Optimization via API Gateway (if proxied)
-curl -X POST "http://localhost:8089/esb/routes/optimize" \
+curl -X POST "http://localhost:8089/api/orders/routes/optimize" \
      -H "Content-Type: application/json" \
      -d '{
-       "vehicleId": "VEH003",
-       "address": "789 Kandy Road, Kadawatha"
+       "vehicleId": "VEH004",
+       "address": "101 Negombo Road, Ja-Ela"
      }'
 ```
 
