@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
 
 @RestController
 public class EsbController {
@@ -189,32 +190,44 @@ public class EsbController {
     // Add Map support for Order Service
     @PostMapping("/orders/map")
     public ResponseEntity<Map<String, Object>> createOrderFromMap(@RequestBody Map<String, Object> orderData) {
-        logger.info("ESB received order data from microservice: {}", orderData);
+        logger.info("ESB received detailed order data: {}", orderData);
 
         try {
-            // Extract data from the map sent by Order Service
+            // Extract data including items
             String orderId = (String) orderData.get("orderId");
             String clientId = (String) orderData.get("clientId");
             String deliveryAddress = (String) orderData.get("deliveryAddress");
             String pickupAddress = (String) orderData.get("pickupAddress");
+            String recipientName = (String) orderData.get("recipientName");
+            String recipientPhone = (String) orderData.get("recipientPhone");
+            String notes = (String) orderData.get("notes");
+            Double totalWeight = (Double) orderData.get("totalWeight");
+            Integer totalItems = (Integer) orderData.get("totalItems");
+            List<?> items = (List<?>) orderData.get("items");
 
-            logger.info("Processing order - ID: {}, Client: {}, Delivery: {}", orderId, clientId, deliveryAddress);
+            logger.info("Processing order {} with {} items ({}kg total) for recipient: {}",
+                    orderId, totalItems, totalWeight, recipientName);
 
             Map<String, Object> response = new HashMap<>();
             Map<String, Boolean> registrationResults = new HashMap<>();
 
-            // 1. Validate client with CMS AND create order record
+            // Create detailed order object
+            DeliveryOrder order = new DeliveryOrder();
+            order.setOrderId(orderId);
+            order.setClientId(clientId);
+            order.setDeliveryAddress(deliveryAddress);
+            order.setPickupAddress(pickupAddress);
+            order.setRecipientName(recipientName);
+            order.setRecipientPhone(recipientPhone);
+            order.setNotes(notes);
+            order.setTotalWeight(totalWeight != null ? totalWeight : 0.0);
+            order.setTotalItems(totalItems != null ? totalItems : 0);
+
+            // 1. Validate client and create order in CMS
             String clientValidation = cmsService.fetchClientData(clientId);
             logger.info("Client validation result: {}", clientValidation);
 
             if (!clientValidation.contains("Invalid") && !clientValidation.contains("Error")) {
-                // Create order record in CMS
-                DeliveryOrder order = new DeliveryOrder();
-                order.setOrderId(orderId);
-                order.setClientId(clientId);
-                order.setDeliveryAddress(deliveryAddress);
-                order.setPickupAddress(pickupAddress);
-
                 try {
                     String cmsOrderResult = cmsService.createOrder(order);
                     logger.info("CMS order creation result: {}", cmsOrderResult);
@@ -227,9 +240,9 @@ public class EsbController {
                 registrationResults.put("CMS", false);
             }
 
-            // 2. Create optimized route with ROS (not just optimize)
+            // 2. Create optimized route with ROS (considering weight for vehicle selection)
             try {
-                String routeResult = rosService.createOptimizedRoute(deliveryAddress, orderId);
+                String routeResult = rosService.createOptimizedRoute(deliveryAddress, orderId, totalWeight);
                 logger.info("ROS route creation result: {}", routeResult);
                 response.put("routeId", routeResult);
                 registrationResults.put("ROS", true);
@@ -239,14 +252,8 @@ public class EsbController {
                 registrationResults.put("ROS", false);
             }
 
-            // 3. Register package with WMS (not just check status)
+            // 3. Register package with WMS (with detailed item information)
             try {
-                DeliveryOrder order = new DeliveryOrder();
-                order.setOrderId(orderId);
-                order.setClientId(clientId);
-                order.setDeliveryAddress(deliveryAddress);
-                order.setPickupAddress(pickupAddress);
-
                 String wmsResult = wmsService.registerPackage(order);
                 logger.info("WMS package registration result: {}", wmsResult);
                 response.put("wmsStatus", wmsResult);
@@ -259,29 +266,21 @@ public class EsbController {
 
             // Determine overall success
             long successfulRegistrations = registrationResults.values().stream().mapToLong(b -> b ? 1 : 0).sum();
-            boolean overallSuccess = successfulRegistrations >= 2; // At least 2 out of 3 systems should succeed
+            boolean overallSuccess = successfulRegistrations >= 2;
 
             response.put("success", overallSuccess);
             response.put("orderId", orderId);
             response.put("clientValidation", clientValidation);
             response.put("registrationResults", registrationResults);
+            response.put("itemsSummary", totalItems + " items, " + totalWeight + "kg total");
+            response.put("recipient", recipientName);
             response.put("processedBy", "ESB");
             response.put("timestamp", System.currentTimeMillis());
 
             if (overallSuccess) {
-                // Only publish event if order was successfully registered
-                DeliveryOrder order = new DeliveryOrder();
-                order.setOrderId(orderId);
-                order.setClientId(clientId);
-                order.setDeliveryAddress(deliveryAddress);
-                order.setPickupAddress(pickupAddress);
-
                 publishOrderCreatedEvent(order, response);
-                logger.info("Order {} successfully created and registered in {} out of {} systems",
-                        orderId, successfulRegistrations, registrationResults.size());
-            } else {
-                logger.warn("Order {} creation partially failed - only {} out of {} systems succeeded",
-                        orderId, successfulRegistrations, registrationResults.size());
+                logger.info("Order {} successfully created with {} items ({}kg) for {}",
+                        orderId, totalItems, totalWeight, recipientName);
             }
 
             return ResponseEntity.ok(response);

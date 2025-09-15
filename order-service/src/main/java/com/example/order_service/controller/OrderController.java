@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.slf4j.Logger;
@@ -45,10 +46,21 @@ public class OrderController {
             esbRequest.put("clientId", request.getClientId());
             esbRequest.put("deliveryAddress", request.getDeliveryAddress());
             esbRequest.put("pickupAddress", request.getPickupAddress());
-            esbRequest.put("packageDetails", request.getPackageDetails());
+            esbRequest.put("recipientName", request.getRecipientName());
+            esbRequest.put("recipientPhone", request.getRecipientPhone());
+            esbRequest.put("items", request.getItems());
+            esbRequest.put("notes", request.getNotes());
+            esbRequest.put("totalWeight", request.getTotalWeight());
+            esbRequest.put("totalItems", request.getTotalItems());
+
+            // Generate package details from items
+            String packageDetails = generatePackageDetails(request.getItems());
+            esbRequest.put("packageDetails", packageDetails);
 
             // Call ESB Service through Feign Client
-            logger.info("Calling ESB Service with order: {}", orderId);
+            logger.info("Calling ESB Service with order: {} containing {} items ({}kg total)",
+                    orderId, request.getTotalItems(), request.getTotalWeight());
+
             ResponseEntity<Map<String, Object>> esbResponse = esbClient.processOrder(esbRequest);
 
             // Get response body
@@ -58,9 +70,11 @@ public class OrderController {
             if (responseBody != null) {
                 responseBody.put("processedBy", "order-service");
                 responseBody.put("timestamp", System.currentTimeMillis());
+                responseBody.put("itemsSummary",
+                        request.getTotalItems() + " items, " + request.getTotalWeight() + "kg total");
             }
 
-            logger.info("ESB processing completed for order: {}", orderId);
+            logger.info("ESB processing completed for order: {} with {} items", orderId, request.getTotalItems());
             return ResponseEntity.ok(responseBody);
 
         } catch (Exception e) {
@@ -341,5 +355,23 @@ public class OrderController {
             errorResponse.put("cancellationTimestamp", System.currentTimeMillis());
             return ResponseEntity.status(500).body(errorResponse);
         }
+    }
+
+    // Helper method to generate package details from items
+    private String generatePackageDetails(List<CreateOrderRequest.OrderItem> items) {
+        if (items == null || items.isEmpty()) {
+            return "Package contents not specified";
+        }
+
+        StringBuilder details = new StringBuilder();
+        for (int i = 0; i < items.size(); i++) {
+            CreateOrderRequest.OrderItem item = items.get(i);
+            details.append(String.format("#%d: %s (ID: %s, Qty: %d, Weight: %.1fkg)",
+                    i + 1, item.getDescription(), item.getItemId(), item.getQuantity(), item.getWeightKg()));
+            if (i < items.size() - 1) {
+                details.append("; ");
+            }
+        }
+        return details.toString();
     }
 }
