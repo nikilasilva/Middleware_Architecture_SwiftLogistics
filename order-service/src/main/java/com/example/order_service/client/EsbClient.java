@@ -40,12 +40,11 @@ public interface EsbClient {
     // NEW: Check ESB health
     @GetMapping("/health")
     ResponseEntity<Map<String, Object>> checkHealth();
-  
-    //method 6
+
+    // method 6
     // Add this method to your EsbClient interface
     @PostMapping("/routes/optimize")
     ResponseEntity<Map<String, Object>> optimizeRoute(@RequestBody Map<String, Object> routeRequest);
-
 
     // method7
     // NEW: Package tracking through ESB
@@ -55,5 +54,9 @@ public interface EsbClient {
     // Cancel order endpoint
     @DeleteMapping("/orders/cancel")
     ResponseEntity<Map<String, Object>> cancelOrder(@RequestParam("orderId") String orderId);
+
+    // Get all orders for a specific client
+    @GetMapping("/clients/{clientId}/orders")
+    ResponseEntity<Map<String, Object>> getOrdersByClient(@PathVariable("clientId") String clientId);
 
 }
