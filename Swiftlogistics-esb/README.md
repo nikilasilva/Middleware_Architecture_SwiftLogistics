@@ -66,3 +66,9 @@ Note: GET is already inferred.
 Method 7 :
 curl -X GET "http://localhost:8084/packages/PKG123456/track" -H "Content-Type: application/json"  
 {"warehouseInfo":"Status: Processing, Weight: 1.8kg, Zone: B, Dimensions: 25x15x10cm","packageId":"PKG123456","orderInfo":"Client: Fashion Hub Lanka, Recipient: Jane Smith, Order Status: processing, Delivery: 456 Oak Ave","routeInfo":"Route: RT002, Vehicle: VEH002, Driver: Nimal Silva, Status: planned, ETA: 2024-01-16 16:00","timestamp":1757911738925}
+
+through api gateway
+curl -X GET "http://localhost:8089/api/orders/packages/PKG123456/track" \
+  -H "Content-Type: application/json"
+
+, Order Status: processing, Delivery: 456 Oak Ave","routeInfo":"Route: RT002, Vehicle: VEH002, Driver: Nimal Silva, Status: planned, ETA: 2024-01-16 16:00","timestamp":1757914459025,"servicedBy":"order-service","trackingRequestTime":1757914459127,"customerFriendlyStatus":"⚙️ Processinng - Your package is being prepared","estimatedDelivery":"2024-01-16 16:00"}

@@ -136,6 +136,71 @@ public class OrderController {
         }
     }
 
+    // method 7
+    // NEW: Package tracking endpoint - Customer facing
+    @GetMapping("/packages/{packageId}/track")
+    public ResponseEntity<Map<String, Object>> trackPackage(@PathVariable String packageId) {
+        logger.info("Order Service received package tracking request for package: {}", packageId);
+
+        try {
+            // Call ESB to get comprehensive package tracking information
+            ResponseEntity<Map<String, Object>> esbResponse = esbClient.trackPackage(packageId);
+            Map<String, Object> trackingData = esbResponse.getBody();
+
+            // Enhance response with Order Service metadata
+            if (trackingData != null) {
+                trackingData.put("servicedBy", "order-service");
+                trackingData.put("trackingRequestTime", System.currentTimeMillis());
+
+                // Add customer-friendly status interpretation
+                String customerStatus = interpretTrackingStatus(trackingData);
+                trackingData.put("customerFriendlyStatus", customerStatus);
+
+                // Add estimated delivery if available
+                String estimatedDelivery = extractEstimatedDelivery(trackingData);
+                if (estimatedDelivery != null) {
+                    trackingData.put("estimatedDelivery", estimatedDelivery);
+                }
+            }
+
+            logger.info("Successfully retrieved tracking information for package: {}", packageId);
+            return ResponseEntity.ok(trackingData);
+
+        } catch (Exception e) {
+            logger.error("Failed to track package {} through ESB: ", packageId, e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("packageId", packageId);
+            errorResponse.put("error", "Package tracking failed: " + e.getMessage());
+            errorResponse.put("servicedBy", "order-service");
+            errorResponse.put("trackingRequestTime", System.currentTimeMillis());
+            return ResponseEntity.status(500).body(errorResponse);
+        }
+    }
+
+    // NEW: Track by Order ID (convenience method for customers)
+    @GetMapping("/{orderId}/track")
+    public ResponseEntity<Map<String, Object>> trackByOrderId(@PathVariable String orderId) {
+        logger.info("Order Service received tracking request for order: {}", orderId);
+
+        try {
+            // Convert order ID to package ID (simple mapping)
+            String packageId = convertOrderIdToPackageId(orderId);
+
+            // Call the package tracking method
+            return trackPackage(packageId);
+
+        } catch (Exception e) {
+            logger.error("Failed to track order {}: ", orderId, e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("orderId", orderId);
+            errorResponse.put("error", "Order tracking failed: " + e.getMessage());
+            errorResponse.put("servicedBy", "order-service");
+            return ResponseEntity.status(500).body(errorResponse);
+        }
+    }
+
     // NEW: Health check endpoint
     @GetMapping("/health")
     public ResponseEntity<Map<String, Object>> healthCheck() {
@@ -185,5 +250,60 @@ public class OrderController {
             logger.error("ESB connection test failed: ", e);
             return ResponseEntity.status(500).body("ESB Connection Failed: " + e.getMessage());
         }
+    }
+
+    // method7
+    // Private helper methods for package tracking
+    private String interpretTrackingStatus(Map<String, Object> trackingData) {
+        try {
+            String warehouseInfo = (String) trackingData.get("warehouseInfo");
+            String routeInfo = (String) trackingData.get("routeInfo");
+
+            if (warehouseInfo != null && warehouseInfo.contains("Delivered")) {
+                return "📦 Delivered - Your package has been successfully delivered!";
+            } else if (routeInfo != null && routeInfo.contains("in_progress")) {
+                return "🚚 Out for Delivery - Your package is on its way!";
+            } else if (warehouseInfo != null && warehouseInfo.contains("Ready for Pickup")) {
+                return "📍 Ready for Delivery - Your package is prepared for dispatch";
+            } else if (warehouseInfo != null && warehouseInfo.contains("Processing")) {
+                return "⚙️ Processing - Your package is being prepared";
+            } else if (warehouseInfo != null && warehouseInfo.contains("In Transit")) {
+                return "🔄 In Transit - Your package is moving through our network";
+            } else {
+                return "📋 Order Received - We're processing your order";
+            }
+        } catch (Exception e) {
+            logger.debug("Error interpreting tracking status: ", e);
+            return "📋 Tracking information available";
+        }
+    }
+
+    private String extractEstimatedDelivery(Map<String, Object> trackingData) {
+        try {
+            String routeInfo = (String) trackingData.get("routeInfo");
+            if (routeInfo != null && routeInfo.contains("ETA:")) {
+                // Extract ETA from route info
+                int etaIndex = routeInfo.indexOf("ETA:");
+                if (etaIndex != -1) {
+                    String eta = routeInfo.substring(etaIndex + 4).trim();
+                    // Remove any trailing text after the date
+                    if (eta.contains(",")) {
+                        eta = eta.substring(0, eta.indexOf(","));
+                    }
+                    return eta;
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Error extracting estimated delivery: ", e);
+        }
+        return null;
+    }
+
+    private String convertOrderIdToPackageId(String orderId) {
+        // Simple conversion logic - in real implementation this would query a database
+        if (orderId.startsWith("ORD")) {
+            return orderId.replace("ORD", "PKG");
+        }
+        return "PKG" + orderId;
     }
 }
