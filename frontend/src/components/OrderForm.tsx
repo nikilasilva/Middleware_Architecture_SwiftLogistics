@@ -163,19 +163,54 @@ export default function OrderForm({ onBack }: OrderFormProps) {
     }));
   };
 
-  const handleMockCreate = () => {
+  // Actual API call to create order
+  const createOrder = async (orderPayload: any) => {
+    try {
+      console.log("Creating order with payload:", orderPayload);
+      const response = await fetch("http://localhost:8089/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(orderPayload),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      console.log("Order creation response:", data);
+      return data;
+    } catch (err) {
+      console.error("Error in createOrder:", err);
+      throw err;
+    }
+  };
+
+  // Use this for actual API submission
+  const handleMockCreate = async () => {
     setLoading(true);
     setError(null);
     setSuccess(null);
-    // Print form data to console
-    console.log("Form Data:", formData);
-    setTimeout(() => {
-      setSuccess("Order created successfully!");
+    try {
+      // Prepare payload as per API spec
+      const orderPayload = {
+        orderId: "ORD001", // In real app, generate or get from backend
+        clientId: formData.clientId,
+        pickupAddress: formData.pickupAddress,
+        deliveryAddress: formData.deliveryAddress,
+        recipientName: formData.recipientName,
+        recipientPhone: formData.recipientPhone,
+        items: formData.items,
+        notes: formData.notes,
+      };
+      const result = await createOrder(orderPayload);
+      setSuccess("Order created successfully! " + (result?.wmsStatus || ""));
       setLoading(false);
       setTimeout(() => {
-        onBack(); // Go to home page after showing success
+        onBack();
       }, 1200);
-    }, 800);
+    } catch (err: any) {
+      setError("Failed to create order. " + (err?.message || ""));
+      setLoading(false);
+    }
   };
 
   return (

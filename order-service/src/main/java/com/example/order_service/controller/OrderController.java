@@ -22,10 +22,10 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
+//
 @RestController
+//@CrossOrigin(origins = "http://192.168.56.1:3000")
 @RequestMapping("/api/orders")
-@CrossOrigin
 public class OrderController {
     private static final Logger logger = LoggerFactory.getLogger(OrderController.class);
 
