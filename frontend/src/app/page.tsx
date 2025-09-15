@@ -3,6 +3,7 @@
 import { useState } from "react";
 import TrackOrders from "../components/TrackOrders";
 import Analytics from "../components/Analytics";
+import OrderForm from "../components/OrderFrom"; // Corrected import statement
 
 export default function Home() {
   const [currentView, setCurrentView] = useState<
@@ -28,6 +29,16 @@ export default function Home() {
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-white">Client Portal</span>
+              <button
+                onClick={() => {
+                  // Remove the signedin cookie
+                  document.cookie = 'signedin=; path=/; max-age=0';
+                  window.location.href = '/login';
+                }}
+                className="ml-4 bg-white text-black px-4 py-2 rounded shadow hover:bg-gray-200 transition-colors font-semibold"
+              >
+                Logout
+              </button>
             </div>
           </div>
         </div>
@@ -134,104 +145,7 @@ export default function Home() {
     </div>
   );
 
-  const OrderForm = ({ onBack }: { onBack: () => void }) => (
-    <div className="min-h-screen bg-white text-black">
-      <header className="bg-black shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div className="flex items-center">
-              <button
-                onClick={onBack}
-                className="text-white hover:text-gray-300 mr-4 transition-colors"
-              >
-                ← Back
-              </button>
-              <h1 className="text-2xl font-bold text-white">
-                Create New Order
-              </h1>
-            </div>
-          </div>
-        </div>
-      </header>
 
-      <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="card p-6">
-          <form className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-black mb-2">
-                Client
-              </label>
-              <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent">
-                <option>TechMart Electronics</option>
-                <option>Fashion Hub Lanka</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-black mb-2">
-                Recipient Name
-              </label>
-              <input
-                type="text"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
-                placeholder="Enter recipient name"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-black mb-2">
-                Delivery Address
-              </label>
-              <textarea
-                rows={3}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent resize-none"
-                placeholder="Enter delivery address"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-black mb-2">
-                Phone Number
-              </label>
-              <input
-                type="tel"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
-                placeholder="Enter phone number"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-black mb-2">
-                Package Details
-              </label>
-              <textarea
-                rows={3}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent resize-none"
-                placeholder="Describe package contents and special instructions"
-                required
-              />
-            </div>
-
-            <div className="flex gap-4 pt-4">
-              <button
-                type="button"
-                onClick={onBack}
-                className="btn-secondary flex-1"
-              >
-                Cancel
-              </button>
-              <button type="submit" className="btn-primary flex-1">
-                Create Order
-              </button>
-            </div>
-          </form>
-        </div>
-      </main>
-    </div>
-  );
 
   return (
     <div>
