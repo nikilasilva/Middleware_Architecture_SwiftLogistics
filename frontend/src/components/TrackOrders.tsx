@@ -120,6 +120,8 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
       packageDetails: packageDetails || updatedOrder.packageDetails
     };
 
+    console.log("Saving order:", orderWithUpdatedDetails);
+
     setOrders(prev => 
       prev.map(order => 
         order.id === orderWithUpdatedDetails.id ? orderWithUpdatedDetails : order
@@ -133,6 +135,7 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
   };
 
   const handleCancelOrder = (orderId: string) => {
+    console.log("Cancelling order ID:", orderId);
     setOrders(prev => 
       prev.map(order => 
         order.id === orderId ? { ...order, status: "cancelled" } : order

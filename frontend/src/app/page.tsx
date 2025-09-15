@@ -3,7 +3,7 @@
 import { useState } from "react";
 import TrackOrders from "../components/TrackOrders";
 import Analytics from "../components/Analytics";
-import OrderForm from "../components/OrderFrom"; // Corrected import statement
+import OrderForm from "../components/OrderForm"; // Corrected import statement
 
 export default function Home() {
   const [currentView, setCurrentView] = useState<
