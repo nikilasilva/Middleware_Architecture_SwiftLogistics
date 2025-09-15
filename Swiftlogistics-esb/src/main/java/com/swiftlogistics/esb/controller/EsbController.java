@@ -107,7 +107,6 @@ public class EsbController {
         }
     }
 
-
     // 3. Get order status from all systems
     @GetMapping("/orders/{orderId}/status")
     public ResponseEntity<Map<String, Object>> getOrderStatus(@PathVariable("orderId") String orderId) {
@@ -184,9 +183,8 @@ public class EsbController {
             errorResponse.put("timestamp", System.currentTimeMillis());
 
             return ResponseEntity.internalServerError().body(errorResponse);
-        }      
+        }
     }
-
 
     // Add Map support for Order Service
     @PostMapping("/orders/map")
@@ -310,38 +308,37 @@ public class EsbController {
     // }
 
     // // 7. Package tracking endpoint
-    // @GetMapping("/packages/{packageId}/track")
-    // public ResponseEntity<Map<String, Object>> trackPackage(@PathVariable String
-    // packageId) {
-    // logger.info("Tracking package: {}", packageId);
+    @GetMapping("/packages/{packageId}/track")
+    public ResponseEntity<Map<String, Object>> trackPackage(@PathVariable("packageId") String packageId) {
+        logger.info("Tracking package: {}", packageId);
 
-    // try {
-    // Map<String, Object> tracking = new HashMap<>();
+        try {
+            Map<String, Object> tracking = new HashMap<>();
 
-    // // Get package info from WMS
-    // String wmsInfo = wmsService.getPackageInfo(packageId);
+            // Get package info from WMS
+            String wmsInfo = wmsService.getPackageInfo(packageId);
 
-    // // Get related order info from CMS
-    // String cmsInfo = cmsService.getPackageOrderInfo(packageId);
+            // Get related order info from CMS
+            String cmsInfo = cmsService.getPackageOrderInfo(packageId);
 
-    // // Get route info from ROS
-    // String routeInfo = rosService.getPackageRouteInfo(packageId);
+            // Get route info from ROS
+            String routeInfo = rosService.getPackageRouteInfo(packageId);
 
-    // tracking.put("packageId", packageId);
-    // tracking.put("warehouseInfo", wmsInfo);
-    // tracking.put("orderInfo", cmsInfo);
-    // tracking.put("routeInfo", routeInfo);
-    // tracking.put("timestamp", System.currentTimeMillis());
+            tracking.put("packageId", packageId);
+            tracking.put("warehouseInfo", wmsInfo);
+            tracking.put("orderInfo", cmsInfo);
+            tracking.put("routeInfo", routeInfo);
+            tracking.put("timestamp", System.currentTimeMillis());
 
-    // return ResponseEntity.ok(tracking);
+            return ResponseEntity.ok(tracking);
 
-    // } catch (Exception e) {
-    // logger.error("Error tracking package: ", e);
-    // Map<String, Object> errorResponse = new HashMap<>();
-    // errorResponse.put("error", e.getMessage());
-    // return ResponseEntity.internalServerError().body(errorResponse);
-    // }
-    // }
+        } catch (Exception e) {
+            logger.error("Error tracking package: ", e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", e.getMessage());
+            return ResponseEntity.internalServerError().body(errorResponse);
+        }
+    }
 
     // // 8. Client information endpoint
     // @GetMapping("/clients/{clientId}")
@@ -395,11 +392,11 @@ public class EsbController {
     // }
     // }
 
-   // 10. Emergency order cancellation with smart ID mapping
+    // 10. Emergency order cancellation with smart ID mapping
     @DeleteMapping("/orders/cancel")
     public ResponseEntity<Map<String, Object>> cancelOrder(@RequestParam("orderId") String orderId) {
 
-            try {
+        try {
             Map<String, Object> response = new HashMap<>();
 
             // Cancel in all systems

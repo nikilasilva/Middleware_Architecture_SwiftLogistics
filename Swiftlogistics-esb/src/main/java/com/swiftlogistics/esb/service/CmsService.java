@@ -449,6 +449,127 @@ public class CmsService {
                 "</soap:Envelope>";
     }
 
+    // theesh:dev method 7 order tracking get
+    public String getPackageOrderInfo(String packageId) {
+        try {
+            logger.info("Getting package order info for package: {}", packageId);
+
+            // Convert packageId to orderId for CMS lookup
+            String orderId = mapPackageIdToOrderId(packageId);
+
+            String soapRequest = createGetPackageOrderInfoSoapRequest(packageId, orderId);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.TEXT_XML);
+            headers.set("SOAPAction", "GetPackageOrderInfo");
+
+            HttpEntity<String> request = new HttpEntity<>(soapRequest, headers);
+
+            try {
+                String response = restTemplate.postForObject(CMS_SOAP_URL, request, String.class);
+                return extractPackageOrderInfo(response);
+            } catch (Exception e) {
+                logger.debug("SOAP request failed, returning mock data: ", e);
+                return getMockPackageOrderInfo(packageId);
+            }
+
+        } catch (Exception e) {
+            logger.error("Error getting package order info: ", e);
+            return getMockPackageOrderInfo(packageId);
+        }
+    }
+
+    private String createGetPackageOrderInfoSoapRequest(String packageId, String orderId) {
+        return String.format(
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+                        "<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"\n" +
+                        "               xmlns:cms=\"http://swiftlogistics.lk/cms\">\n" +
+                        "    <soap:Header/>\n" +
+                        "    <soap:Body>\n" +
+                        "        <cms:GetPackageOrderInfo>\n" +
+                        "            <cms:PackageId>%s</cms:PackageId>\n" +
+                        "            <cms:OrderId>%s</cms:OrderId>\n" +
+                        "        </cms:GetPackageOrderInfo>\n" +
+                        "    </soap:Body>\n" +
+                        "</soap:Envelope>",
+                packageId, orderId);
+    }
+
+    private String extractPackageOrderInfo(String soapResponse) {
+        if (soapResponse != null) {
+            // Try to extract order information from SOAP response
+            StringBuilder info = new StringBuilder();
+
+            if (soapResponse.contains("<cms:ClientId>")) {
+                String clientId = extractXmlValue(soapResponse, "cms:ClientId");
+                info.append("Client: ").append(clientId);
+            }
+
+            if (soapResponse.contains("<cms:RecipientName>")) {
+                String recipient = extractXmlValue(soapResponse, "cms:RecipientName");
+                info.append(", Recipient: ").append(recipient);
+            }
+
+            if (soapResponse.contains("<cms:Status>")) {
+                String status = extractXmlValue(soapResponse, "cms:Status");
+                info.append(", Order Status: ").append(status);
+            }
+
+            if (info.length() > 0) {
+                return info.toString();
+            }
+        }
+
+        return getMockPackageOrderInfo(null);
+    }
+
+    private String extractXmlValue(String xml, String tagName) {
+        try {
+            String startTag = "<" + tagName + ">";
+            String endTag = "</" + tagName + ">";
+            int start = xml.indexOf(startTag);
+            int end = xml.indexOf(endTag);
+
+            if (start != -1 && end != -1 && end > start) {
+                return xml.substring(start + startTag.length(), end).trim();
+            }
+        } catch (Exception e) {
+            logger.debug("Failed to extract XML value for tag: {}", tagName);
+        }
+        return "";
+    }
+
+    private String getMockPackageOrderInfo(String packageId) {
+        logger.info("Using mock package order info for packageId: {}", packageId);
+
+        if (packageId == null) {
+            return "Order info unavailable";
+        }
+
+        // Generate mock data based on package ID
+        int hash = Math.abs(packageId.hashCode()) % 3;
+
+        switch (hash) {
+            case 0:
+                return "Client: TechMart Electronics, Recipient: John Doe, Order Status: confirmed, Delivery: 123 Main St";
+            case 1:
+                return "Client: Fashion Hub Lanka, Recipient: Jane Smith, Order Status: processing, Delivery: 456 Oak Ave";
+            case 2:
+                return "Client: ABC Company, Recipient: Bob Johnson, Order Status: shipped, Delivery: 789 Pine Rd";
+            default:
+                return "Client: Unknown, Recipient: Unknown, Order Status: pending";
+        }
+    }
+
+    private String mapPackageIdToOrderId(String packageId) {
+        // Simple mapping logic - in real implementation this would query a database
+        if (packageId.startsWith("PKG")) {
+            return packageId.replace("PKG", "ORD");
+        }
+        return "ORD" + Math.abs(packageId.hashCode());
+    }
+    // end : theesh dev
+
     public String cancelOrder(String orderId) {
         try {
             logger.info("Cancelling CMS order: {}", orderId);
