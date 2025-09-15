@@ -137,6 +137,36 @@ public class OrderController {
         }
     }
 
+    //method 6 : route optimization
+    // Add this method to your OrderController class
+    @PostMapping("/routes/optimize")
+    public ResponseEntity<Map<String, Object>> optimizeRoute(@RequestBody Map<String, Object> routeRequest) {
+        logger.info("Order Service received route optimization request: {}", routeRequest);
+
+        try {
+            // Call ESB route optimization through Feign Client
+            ResponseEntity<Map<String, Object>> esbResponse = esbClient.optimizeRoute(routeRequest);
+            Map<String, Object> responseBody = esbResponse.getBody();
+
+            // Add Order Service metadata
+            if (responseBody != null) {
+                responseBody.put("routedBy", "order-service");
+                responseBody.put("routeRequestTime", System.currentTimeMillis());
+            }
+
+            logger.info("Successfully optimized route via ESB");
+            return ResponseEntity.ok(responseBody);
+
+        } catch (Exception e) {
+            logger.error("Failed to optimize route through ESB: ", e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "Route optimization failed: " + e.getMessage());
+            errorResponse.put("routedBy", "order-service");
+            return ResponseEntity.status(500).body(errorResponse);
+        }
+    }
+
     // method 7
     // NEW: Package tracking endpoint - Customer facing
     @GetMapping("/packages/{packageId}/track")
@@ -178,6 +208,8 @@ public class OrderController {
             return ResponseEntity.status(500).body(errorResponse);
         }
     }
+    //method 6 route optimization
+
 
     // NEW: Track by Order ID (convenience method for customers)
     @GetMapping("/{orderId}/track")
