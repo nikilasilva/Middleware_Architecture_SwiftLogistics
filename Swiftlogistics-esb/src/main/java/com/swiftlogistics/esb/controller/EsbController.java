@@ -273,6 +273,7 @@ public class EsbController {
             response.put("clientValidation", clientValidation);
             response.put("registrationResults", registrationResults);
             response.put("itemsSummary", totalItems + " items, " + totalWeight + "kg total");
+            response.put("item list", items);
             response.put("recipient", recipientName);
             response.put("processedBy", "ESB");
             response.put("timestamp", System.currentTimeMillis());
