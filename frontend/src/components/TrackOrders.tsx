@@ -1,7 +1,7 @@
 "use client";
 
-
 import StatusStepper from "./StatusStepper";
+import EditOrder from "./EditOrder";
 import { useState, useEffect } from "react";
 import { OrderData } from "@/types";
 
@@ -31,6 +31,7 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
 
   useEffect(() => {
     fetchOrders();
@@ -102,21 +103,41 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "delivered":
-        return "bg-green-100 text-green-800";
-      case "in_transit":
-        return "bg-blue-100 text-blue-800";
-      case "assigned":
-        return "bg-yellow-100 text-yellow-800";
-      case "pending":
-        return "bg-gray-100 text-gray-800";
-      case "cancelled":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800";
+  const handleEditOrder = (order: Order) => {
+    if (order.status === "pending") {
+      setEditingOrder(order);
     }
+  };
+
+  const handleSaveOrder = (updatedOrder: Order) => {
+    // Update packageDetails based on items
+    const packageDetails = updatedOrder.items
+      ?.map((item, index) => `#${index + 1}: ${item.description} (ID: ${item.itemId}, Qty: ${item.quantity}, Weight: ${item.weightKg}kg)`)
+      .join("; ");
+
+    const orderWithUpdatedDetails = {
+      ...updatedOrder,
+      packageDetails: packageDetails || updatedOrder.packageDetails
+    };
+
+    setOrders(prev => 
+      prev.map(order => 
+        order.id === orderWithUpdatedDetails.id ? orderWithUpdatedDetails : order
+      )
+    );
+    setEditingOrder(null);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingOrder(null);
+  };
+
+  const handleCancelOrder = (orderId: string) => {
+    setOrders(prev => 
+      prev.map(order => 
+        order.id === orderId ? { ...order, status: "cancelled" } : order
+      )
+    );
   };
 
   const filteredOrders = orders.filter((order) => {
@@ -213,7 +234,11 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
               </div>
             ) : (
               filteredOrders.map((order) => (
-                <div key={order.id} className="card p-6">
+                <div 
+                  key={order.id} 
+                  className={`card p-6 cursor-pointer transition-all ${order.status === "pending" ? "hover:shadow-md" : ""}`}
+                  onClick={() => handleEditOrder(order)}
+                >
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Column 1: Order Info - JSON details */}
                     <div>
@@ -221,6 +246,11 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
                         <h3 className="text-lg font-semibold">
                           Tracking: {order.trackingNumber}
                         </h3>
+                        {order.status === "pending" && (
+                          <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                            Click to edit
+                          </span>
+                        )}
                       </div>
                       <div className="mb-1 text-gray-600">
                         <strong>Client ID:</strong> {order.clientId}
@@ -281,13 +311,31 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
                           <StatusStepper status={order.status} />
                         </div>
                       </div>
-                      {order.driverName && (
-                        <div>
-                          <button className="btn-secondary text-sm py-1 w-full">
+                      <div className="flex flex-col gap-2">
+                        {order.driverName && (
+                          <button 
+                            className="btn-secondary text-sm py-1 w-full"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // Handle contact driver logic
+                            }}
+                          >
                             Contact Driver
                           </button>
-                        </div>
-                      )}
+                        )}
+                        {/* Cancel Order Button */}
+                        {order.status !== "cancelled" && order.status !== "delivered" && (
+                          <button 
+                            className="text-sm py-1 w-full border border-red-500 text-red-500 rounded hover:bg-red-50 transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCancelOrder(order.id);
+                            }}
+                          >
+                            Cancel Order
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -322,6 +370,15 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
           </div>
         </div>
       </main>
+
+      {/* Edit Order Modal */}
+      {editingOrder && (
+        <EditOrder 
+          order={editingOrder} 
+          onSave={handleSaveOrder}
+          onCancel={handleCancelEdit}
+        />
+      )}
     </div>
   );
 }
