@@ -28,6 +28,27 @@ clients = {
         "billing_rate": 120.00,
     },
 }
+# theesh:dev
+packages = {
+    "PKG123456": {
+        "client": "Fashion Hub Lanka",
+        "recipient": "Jane Smith", 
+        "status": "processing",
+        "delivery": "456 Oak Ave"
+    },
+    "PKG789": {
+        "client": "TechMart Electronics",
+        "recipient": "John Doe",
+        "status": "confirmed", 
+        "delivery": "123 Main St"
+    },
+    "PKG001": {
+        "client": "Fashion Hub Lanka",
+        "recipient": "Mike Wilson",
+        "status": "shipped",
+        "delivery": "789 Pine Rd"
+    }
+}
 
 orders = {}
 
@@ -83,6 +104,8 @@ def soap_endpoint():
             return handle_update_billing(soap_body)
         elif operation == "CancelOrder":
             return handle_cancel_order(soap_body)
+        elif operation == "GetPackageOrderInfo":
+            return handle_get_package_order_info(soap_body)
         else:
             return create_soap_fault(f"Unknown operation: {operation}"), 400
     except Exception as e:
@@ -380,7 +403,55 @@ def handle_update_billing(soap_body):
     except Exception as e:
         return create_soap_fault(f"Error updating billing: {str(e)}"), 500
 
+def handle_get_package_order_info(soap_body):
+    """Handle package order info inquiry"""
+    try:
+        # Try to find PackageId with or without namespace
+        package_id_elem = soap_body.find("cms:PackageId", NAMESPACES)
+        if package_id_elem is None:
+            package_id_elem = soap_body.find("PackageId")
+        
+        if package_id_elem is None or not package_id_elem.text:
+            return create_soap_fault("Missing PackageId in GetPackageOrderInfo request"), 400
 
+        package_id = package_id_elem.text.strip()
+        
+        if package_id in packages:
+            package_data = packages[package_id]
+            response_body = f"""
+        <cms:GetPackageOrderInfoResponse>
+            <cms:PackageId>{package_id}</cms:PackageId>
+            <cms:Client>{package_data['client']}</cms:Client>
+            <cms:Recipient>{package_data['recipient']}</cms:Recipient>
+            <cms:Status>{package_data['status']}</cms:Status>
+            <cms:Delivery>{package_data['delivery']}</cms:Delivery>
+            <cms:Timestamp>{datetime.now().isoformat()}</cms:Timestamp>
+        </cms:GetPackageOrderInfoResponse>"""
+        else:
+            # Return mock data for unknown packages
+            response_body = f"""
+        <cms:GetPackageOrderInfoResponse>
+            <cms:PackageId>{package_id}</cms:PackageId>
+            <cms:Client>Unknown Client</cms:Client>
+            <cms:Recipient>Unknown Recipient</cms:Recipient>
+            <cms:Status>unknown</cms:Status>
+            <cms:Delivery>Unknown Address</cms:Delivery>
+            <cms:Timestamp>{datetime.now().isoformat()}</cms:Timestamp>
+        </cms:GetPackageOrderInfoResponse>"""
+
+        response = Response(
+            create_soap_response(response_body),
+            mimetype="text/xml",
+            headers={"SOAPAction": "GetPackageOrderInfoResponse"},
+        )
+
+        print(f"[CMS] Package info requested for: {package_id}")
+        return response
+
+    except Exception as e:
+        print(f"[CMS] ERROR in handle_get_package_order_info: {str(e)}")
+        return create_soap_fault(f"Error getting package order info: {str(e)}"), 500
+    
 def create_soap_fault(error_message):
     """Create SOAP fault response"""
     fault_body = f"""
@@ -452,12 +523,23 @@ def health_check():
         "timestamp": datetime.now().isoformat(),
         "orders_count": len(orders),
         "clients_count": len(clients),
+        "packages_count": len(packages),
+        "supported_operations": [
+            "CreateOrder",
+            "GetOrderStatus", 
+            "GetClientInfo",
+            "UpdateBilling",
+            "CancelOrder",
+            "GetPackageOrderInfo"
+        ]
     }
 
 
 if __name__ == "__main__":
-    print("Starting CMS (Client Management System) - SOAP/XML Server")
-    print("WSDL available at: http://localhost:5001/cms/wsdl")
-    print("SOAP Endpoint: http://localhost:5001/cms/soap")
-    print("Health Check: http://localhost:5001/cms/health")
+    print("🚀 Starting CMS (Client Management System) - SOAP/XML Server")
+    print("📡 WSDL available at: http://localhost:5001/cms/wsdl")
+    print("📡 SOAP Endpoint: http://localhost:5001/cms/soap")
+    print("🔍 Health Check: http://localhost:5001/cms/health")
+    print("📋 Supported Operations: CreateOrder, GetOrderStatus, GetClientInfo, UpdateBilling, CancelOrder, GetPackageOrderInfo")
+    print("📦 Package Data: PKG123456, PKG789, PKG001")
     app.run(host="0.0.0.0", port=5001, debug=True)

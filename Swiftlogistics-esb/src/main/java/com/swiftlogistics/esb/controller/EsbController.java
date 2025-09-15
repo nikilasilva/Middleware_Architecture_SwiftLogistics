@@ -330,32 +330,32 @@ public class EsbController {
     }
 
     // // 6. Route optimization endpoint
-    // @PostMapping("/routes/optimize")
-    // public ResponseEntity<Map<String, Object>> optimizeRoute(@RequestBody
-    // Map<String, Object> routeRequest) {
-    // logger.info("Optimizing route: {}", routeRequest);
+    @PostMapping("/routes/optimize")
+    public ResponseEntity<Map<String, Object>> optimizeRoute(@RequestBody
+                                                             Map<String, Object> routeRequest) {
+        logger.info("Optimizing route: {}", routeRequest);
 
-    // try {
-    // String vehicleId = (String) routeRequest.get("vehicleId");
-    // String address = (String) routeRequest.get("address");
+        try {
+            String vehicleId = (String) routeRequest.get("vehicleId");
+            String address = (String) routeRequest.get("address");
 
-    // String routeResponse = rosService.optimizeRoute(address);
+            String routeResponse = rosService.optimizeRoute(address);
 
-    // Map<String, Object> response = new HashMap<>();
-    // response.put("success", true);
-    // response.put("routeOptimization", routeResponse);
-    // response.put("vehicleId", vehicleId);
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("routeOptimization", routeResponse);
+            response.put("vehicleId", vehicleId);
 
-    // return ResponseEntity.ok(response);
+            return ResponseEntity.ok(response);
 
-    // } catch (Exception e) {
-    // logger.error("Error optimizing route: ", e);
-    // Map<String, Object> errorResponse = new HashMap<>();
-    // errorResponse.put("success", false);
-    // errorResponse.put("error", e.getMessage());
-    // return ResponseEntity.internalServerError().body(errorResponse);
-    // }
-    // }
+        } catch (Exception e) {
+            logger.error("Error optimizing route: ", e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", e.getMessage());
+            return ResponseEntity.internalServerError().body(errorResponse);
+        }
+    }
 
     // // 7. Package tracking endpoint
     @GetMapping("/packages/{packageId}/track")
