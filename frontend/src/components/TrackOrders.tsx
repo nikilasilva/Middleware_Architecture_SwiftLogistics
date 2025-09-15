@@ -1,20 +1,25 @@
 "use client";
 
+import StatusStepper from "./StatusStepper";
+import EditOrder from "./EditOrder";
 import { useState, useEffect } from "react";
+import { OrderData } from "@/types";
 
-interface Order {
+interface Order extends OrderData {
   id: string;
-  clientId: string;
-  recipientName: string;
-  recipientAddress: string;
-  recipientPhone: string;
-  packageDetails: string;
   status: "pending" | "assigned" | "in_transit" | "delivered" | "cancelled";
   createdAt: string;
   estimatedDelivery?: string;
   trackingNumber: string;
   driverName?: string;
   vehicleId?: string;
+  items?: Array<{
+    itemId: string;
+    description: string;
+    quantity: number;
+    weightKg: number;
+  }>;
+  notes?: string;
 }
 
 interface TrackOrdersProps {
@@ -26,6 +31,7 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
 
   useEffect(() => {
     fetchOrders();
@@ -38,42 +44,55 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
       const mockOrders: Order[] = [
         {
           id: "1",
-          clientId: "techmart",
+          clientId: "CLIENT001",
           recipientName: "John Doe",
           recipientAddress: "123 Main St, Colombo",
-          recipientPhone: "+94 77 123 4567",
-          packageDetails: "Electronics - Laptop",
+          recipientPhone: "+94-77-123-4567",
+          packageDetails: "#1: Wireless Mouse (ID: ITEM001, Qty: 2, Weight: 0.2kg); #2: Keyboard (ID: ITEM002, Qty: 1, Weight: 0.8kg)",
           status: "in_transit",
           createdAt: "2024-01-15T10:30:00Z",
           estimatedDelivery: "2024-01-16T15:00:00Z",
           trackingNumber: "SL001234",
           driverName: "Saman Silva",
           vehicleId: "VH001",
+          items: [
+            { itemId: "ITEM001", description: "Wireless Mouse", quantity: 2, weightKg: 0.2 },
+            { itemId: "ITEM002", description: "Keyboard", quantity: 1, weightKg: 0.8 }
+          ],
+          notes: "Leave at the front desk if not home"
         },
         {
           id: "2",
-          clientId: "fashionhub",
+          clientId: "CLIENT002",
           recipientName: "Jane Smith",
           recipientAddress: "456 Galle Road, Kandy",
-          recipientPhone: "+94 71 987 6543",
-          packageDetails: "Clothing - T-shirts (3)",
+          recipientPhone: "+94-71-987-6543",
+          packageDetails: "#1: T-shirt (ID: ITEM003, Qty: 3, Weight: 0.15kg)",
           status: "delivered",
           createdAt: "2024-01-14T08:15:00Z",
           estimatedDelivery: "2024-01-15T12:00:00Z",
           trackingNumber: "SL001235",
           driverName: "Kamal Perera",
           vehicleId: "VH002",
+          items: [
+            { itemId: "ITEM003", description: "T-shirt", quantity: 3, weightKg: 0.15 }
+          ],
+          notes: "Ring the bell twice"
         },
         {
           id: "3",
-          clientId: "techmart",
+          clientId: "CLIENT001",
           recipientName: "Bob Johnson",
           recipientAddress: "789 Hill Street, Galle",
-          recipientPhone: "+94 75 555 1234",
-          packageDetails: "Mobile Phone Case",
+          recipientPhone: "+94-75-555-1234",
+          packageDetails: "#1: Mobile Phone Case (ID: ITEM004, Qty: 1, Weight: 0.05kg)",
           status: "pending",
           createdAt: "2024-01-16T14:20:00Z",
           trackingNumber: "SL001236",
+          items: [
+            { itemId: "ITEM004", description: "Mobile Phone Case", quantity: 1, weightKg: 0.05 }
+          ],
+          notes: "Call before delivery"
         },
       ];
       setOrders(mockOrders);
@@ -84,21 +103,44 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "delivered":
-        return "bg-green-100 text-green-800";
-      case "in_transit":
-        return "bg-blue-100 text-blue-800";
-      case "assigned":
-        return "bg-yellow-100 text-yellow-800";
-      case "pending":
-        return "bg-gray-100 text-gray-800";
-      case "cancelled":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800";
+  const handleEditOrder = (order: Order) => {
+    if (order.status === "pending") {
+      setEditingOrder(order);
     }
+  };
+
+  const handleSaveOrder = (updatedOrder: Order) => {
+    // Update packageDetails based on items
+    const packageDetails = updatedOrder.items
+      ?.map((item, index) => `#${index + 1}: ${item.description} (ID: ${item.itemId}, Qty: ${item.quantity}, Weight: ${item.weightKg}kg)`)
+      .join("; ");
+
+    const orderWithUpdatedDetails = {
+      ...updatedOrder,
+      packageDetails: packageDetails || updatedOrder.packageDetails
+    };
+
+    console.log("Saving order:", orderWithUpdatedDetails);
+
+    setOrders(prev => 
+      prev.map(order => 
+        order.id === orderWithUpdatedDetails.id ? orderWithUpdatedDetails : order
+      )
+    );
+    setEditingOrder(null);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingOrder(null);
+  };
+
+  const handleCancelOrder = (orderId: string) => {
+    console.log("Cancelling order ID:", orderId);
+    setOrders(prev => 
+      prev.map(order => 
+        order.id === orderId ? { ...order, status: "cancelled" } : order
+      )
+    );
   };
 
   const filteredOrders = orders.filter((order) => {
@@ -195,67 +237,108 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
               </div>
             ) : (
               filteredOrders.map((order) => (
-                <div key={order.id} className="card p-6">
-                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-                    {/* Order Info */}
-                    <div className="lg:col-span-2">
+                <div 
+                  key={order.id} 
+                  className={`card p-6 cursor-pointer transition-all ${order.status === "pending" ? "hover:shadow-md" : ""}`}
+                  onClick={() => handleEditOrder(order)}
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Column 1: Order Info - JSON details */}
+                    <div>
                       <div className="flex items-center justify-between mb-2">
                         <h3 className="text-lg font-semibold">
                           Tracking: {order.trackingNumber}
                         </h3>
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                            order.status
-                          )}`}
-                        >
-                          {order.status.replace("_", " ").toUpperCase()}
-                        </span>
+                        {order.status === "pending" && (
+                          <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                            Click to edit
+                          </span>
+                        )}
                       </div>
-                      <p className="text-gray-600 mb-1">
+                      <div className="mb-1 text-gray-600">
+                        <strong>Client ID:</strong> {order.clientId}
+                      </div>
+                      <div className="mb-1 text-gray-600">
                         <strong>Recipient:</strong> {order.recipientName}
-                      </p>
-                      <p className="text-gray-600 mb-1">
+                      </div>
+                      <div className="mb-1 text-gray-600">
                         <strong>Address:</strong> {order.recipientAddress}
-                      </p>
-                      <p className="text-gray-600 mb-1">
+                      </div>
+                      <div className="mb-1 text-gray-600">
                         <strong>Phone:</strong> {order.recipientPhone}
-                      </p>
-                      <p className="text-gray-600">
-                        <strong>Package:</strong> {order.packageDetails}
-                      </p>
-                    </div>
-
-                    {/* Delivery Info */}
-                    <div>
-                      <p className="text-gray-600 mb-1">
-                        <strong>Created:</strong> {formatDate(order.createdAt)}
-                      </p>
-                      {order.estimatedDelivery && (
-                        <p className="text-gray-600 mb-1">
-                          <strong>Est. Delivery:</strong>{" "}
-                          {formatDate(order.estimatedDelivery)}
-                        </p>
+                      </div>
+                      <div className="mb-1 text-gray-600">
+                        <strong>Package Details:</strong> {order.packageDetails}
+                      </div>
+                      {order.items && order.items.length > 0 && (
+                        <div className="mb-1 text-gray-600">
+                          <strong>Items:</strong>
+                          <ul className="ml-4 list-disc">
+                            {order.items.map((item, idx) => (
+                              <li key={item.itemId}>
+                                {item.description} (ID: {item.itemId}, Qty: {item.quantity}, Weight: {item.weightKg}kg)
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
                       )}
-                      {order.driverName && (
-                        <p className="text-gray-600 mb-1">
-                          <strong>Driver:</strong> {order.driverName}
-                        </p>
-                      )}
-                      {order.vehicleId && (
-                        <p className="text-gray-600">
-                          <strong>Vehicle:</strong> {order.vehicleId}
-                        </p>
+                      {order.notes && (
+                        <div className="mb-1 text-gray-600">
+                          <strong>Notes:</strong> {order.notes}
+                        </div>
                       )}
                     </div>
 
-                    {/* Actions */}
-                    <div className="flex flex-col space-y-2">
-                      <button className="btn-primary text-sm py-1">
-                        View Details
-                      </button>
-                      <button className="btn-secondary text-sm py-1">
-                        Contact Driver
-                      </button>
+                    {/* Column 2: Contact/Driver Info, Status, and Actions */}
+                    <div className="flex flex-col gap-2 justify-between">
+                      <div>
+                        <p className="text-gray-600 mb-1">
+                          <strong>Created:</strong> {formatDate(order.createdAt)}
+                        </p>
+                        {order.estimatedDelivery && (
+                          <p className="text-gray-600 mb-1">
+                            <strong>Est. Delivery:</strong> {formatDate(order.estimatedDelivery)}
+                          </p>
+                        )}
+                        {order.driverName && (
+                          <p className="text-gray-600 mb-1">
+                            <strong>Driver:</strong> {order.driverName}
+                          </p>
+                        )}
+                        {order.vehicleId && (
+                          <p className="text-gray-600 mb-1">
+                            <strong>Vehicle:</strong> {order.vehicleId}
+                          </p>
+                        )}
+                        <div className="mb-2">
+                          <StatusStepper status={order.status} />
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        {order.driverName && (
+                          <button 
+                            className="btn-secondary text-sm py-1 w-full"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // Handle contact driver logic
+                            }}
+                          >
+                            Contact Driver
+                          </button>
+                        )}
+                        {/* Cancel Order Button */}
+                        {order.status !== "cancelled" && order.status !== "delivered" && (
+                          <button 
+                            className="text-sm py-1 w-full border border-red-500 text-red-500 rounded hover:bg-red-50 transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCancelOrder(order.id);
+                            }}
+                          >
+                            Cancel Order
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -290,6 +373,15 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
           </div>
         </div>
       </main>
+
+      {/* Edit Order Modal */}
+      {editingOrder && (
+        <EditOrder 
+          order={editingOrder} 
+          onSave={handleSaveOrder}
+          onCancel={handleCancelEdit}
+        />
+      )}
     </div>
   );
 }
