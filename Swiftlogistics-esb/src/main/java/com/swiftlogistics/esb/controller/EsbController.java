@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.List;
@@ -332,8 +333,7 @@ public class EsbController {
 
     // // 6. Route optimization endpoint
     @PostMapping("/routes/optimize")
-    public ResponseEntity<Map<String, Object>> optimizeRoute(@RequestBody
-                                                             Map<String, Object> routeRequest) {
+    public ResponseEntity<Map<String, Object>> optimizeRoute(@RequestBody Map<String, Object> routeRequest) {
         logger.info("Optimizing route: {}", routeRequest);
 
         try {
@@ -544,6 +544,96 @@ public class EsbController {
         } catch (Exception e) {
             logger.error("Failed to publish order cancellation event: ", e);
             // Don't fail the cancellation if messaging fails
+        }
+    }
+
+    // Get all orders for a specific client
+    @GetMapping("/clients/{clientId}/orders")
+    public ResponseEntity<Map<String, Object>> getOrdersByClient(@PathVariable("clientId") String clientId) {
+        logger.info("ESB received request to get all orders for client: {}", clientId);
+
+        try {
+            Map<String, Object> response = new HashMap<>();
+
+            // Get orders from CMS (primary source)
+            List<Map<String, Object>> cmsOrders = cmsService.getOrdersByClient(clientId);
+
+            // Enhance with data from ROS and WMS
+            List<Map<String, Object>> enrichedOrders = enrichOrdersWithSystemData(cmsOrders);
+
+            response.put("success", true);
+            response.put("clientId", clientId);
+            response.put("orders", enrichedOrders);
+            response.put("totalOrders", enrichedOrders.size());
+            response.put("dataSource", "CMS with ROS/WMS enrichment");
+            response.put("timestamp", System.currentTimeMillis());
+
+            logger.info("Successfully retrieved {} orders for client: {}", enrichedOrders.size(), clientId);
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            logger.error("Error getting orders for client {}: ", clientId, e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("clientId", clientId);
+            errorResponse.put("error", e.getMessage());
+            errorResponse.put("timestamp", System.currentTimeMillis());
+            return ResponseEntity.internalServerError().body(errorResponse);
+        }
+    }
+
+    // Helper method to enrich orders with ROS and WMS data
+    private List<Map<String, Object>> enrichOrdersWithSystemData(List<Map<String, Object>> orders) {
+        List<Map<String, Object>> enrichedOrders = new ArrayList<>();
+
+        for (Map<String, Object> order : orders) {
+            Map<String, Object> enrichedOrder = new HashMap<>(order);
+            String orderId = (String) order.get("orderId");
+
+            try {
+                // Get route information from ROS
+                String routeStatus = rosService.getRouteStatus(orderId);
+                enrichedOrder.put("routeStatus", routeStatus);
+
+                // Get package information from WMS
+                String packageStatus = wmsService.getPackageStatus(orderId);
+                enrichedOrder.put("packageStatus", packageStatus);
+
+                // Add comprehensive status
+                enrichedOrder.put("overallStatus", determineOverallStatus(
+                        (String) order.get("status"), routeStatus, packageStatus));
+
+            } catch (Exception e) {
+                logger.debug("Failed to enrich order {} with system data: {}", orderId, e.getMessage());
+                // Add default values if enrichment fails
+                enrichedOrder.put("routeStatus", "unknown");
+                enrichedOrder.put("packageStatus", "unknown");
+                enrichedOrder.put("overallStatus", order.get("status"));
+            }
+
+            enrichedOrders.add(enrichedOrder);
+        }
+
+        return enrichedOrders;
+    }
+
+    // Helper method to determine overall order status
+    private String determineOverallStatus(String cmsStatus, String routeStatus, String packageStatus) {
+        // Logic to combine statuses from different systems
+        if ("delivered".equalsIgnoreCase(packageStatus) || "completed".equalsIgnoreCase(routeStatus)) {
+            return "DELIVERED";
+        } else if ("in_progress".equalsIgnoreCase(routeStatus) || "LOADED".equalsIgnoreCase(packageStatus)) {
+            return "IN_TRANSIT";
+        } else if ("confirmed".equalsIgnoreCase(cmsStatus) && "READY_FOR_LOADING".equalsIgnoreCase(packageStatus)) {
+            return "READY_FOR_DISPATCH";
+        } else if ("processing".equalsIgnoreCase(cmsStatus) || "PROCESSING".equalsIgnoreCase(packageStatus)) {
+            return "PROCESSING";
+        } else if ("pending".equalsIgnoreCase(cmsStatus)) {
+            return "PENDING";
+        } else if ("CANCELLED".equalsIgnoreCase(cmsStatus) || "cancelled".equalsIgnoreCase(routeStatus)) {
+            return "CANCELLED";
+        } else {
+            return "UNKNOWN";
         }
     }
 

@@ -5,7 +5,7 @@ import com.example.order_service.model.CreateOrderRequest;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
+// import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,9 +22,10 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 //
 @RestController
-//@CrossOrigin(origins = "http://192.168.56.1:3000")
+// @CrossOrigin(origins = "http://192.168.56.1:3000")
 @RequestMapping("/api/orders")
 public class OrderController {
     private static final Logger logger = LoggerFactory.getLogger(OrderController.class);
@@ -151,7 +152,7 @@ public class OrderController {
         }
     }
 
-    //method 6 : route optimization
+    // method 6 : route optimization
     // Add this method to your OrderController class
     @PostMapping("/routes/optimize")
     public ResponseEntity<Map<String, Object>> optimizeRoute(@RequestBody Map<String, Object> routeRequest) {
@@ -222,8 +223,7 @@ public class OrderController {
             return ResponseEntity.status(500).body(errorResponse);
         }
     }
-    //method 6 route optimization
-
+    // method 6 route optimization
 
     // NEW: Track by Order ID (convenience method for customers)
     @GetMapping("/{orderId}/track")
@@ -405,5 +405,43 @@ public class OrderController {
             }
         }
         return details.toString();
+    }
+
+    @GetMapping("/client/{clientId}")
+    public ResponseEntity<Map<String, Object>> getOrdersByClient(@PathVariable String clientId) {
+        logger.info("Order Service received request to get all orders for client: {}", clientId);
+
+        try {
+            // Call ESB to get orders from all systems
+            ResponseEntity<Map<String, Object>> esbResponse = esbClient.getOrdersByClient(clientId);
+            Map<String, Object> responseBody = esbResponse.getBody();
+
+            // Add Order Service metadata
+            if (responseBody != null) {
+                responseBody.put("queriedBy", "order-service");
+                responseBody.put("queryTimestamp", System.currentTimeMillis());
+
+                // Add summary information
+                List<?> orders = (List<?>) responseBody.get("orders");
+                if (orders != null) {
+                    responseBody.put("totalOrders", orders.size());
+                    responseBody.put("clientId", clientId);
+                }
+            }
+
+            logger.info("Successfully retrieved {} orders for client: {}",
+                    responseBody != null ? responseBody.get("totalOrders") : 0, clientId);
+            return ResponseEntity.ok(responseBody);
+
+        } catch (Exception e) {
+            logger.error("Failed to get orders for client {} through ESB: ", clientId, e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("clientId", clientId);
+            errorResponse.put("error", "Failed to retrieve client orders: " + e.getMessage());
+            errorResponse.put("queriedBy", "order-service");
+            errorResponse.put("queryTimestamp", System.currentTimeMillis());
+            return ResponseEntity.status(500).body(errorResponse);
+        }
     }
 }

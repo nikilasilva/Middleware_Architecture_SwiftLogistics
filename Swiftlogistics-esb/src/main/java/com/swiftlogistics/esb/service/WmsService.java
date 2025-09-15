@@ -29,16 +29,16 @@ public class WmsService {
     private static final int PACKAGE_UPDATE_RESP = 0x09;
     // method 5 Healthy check variables
     private static final int HEALTH_CHECK_REQ = 0x10;
-    private static final int HEALTH_CHECK_RESP = 0x11;
+    // private static final int HEALTH_CHECK_RESP = 0x11;
 
     private static final int WMS_CANCEL_PACKAGE_REQ = 0x10;
     private static final int WMS_CANCEL_PACKAGE_RESP = 0x11;
 
     // theesh
     private static final Logger logger = LoggerFactory.getLogger(WmsService.class);
-    // theesh on method 7
-    private static final int PACKAGE_INFO_REQ = 0x12;
-    private static final int PACKAGE_INFO_RESP = 0x13;
+    // // theesh on method 7
+    // private static final int PACKAGE_INFO_REQ = 0x12;
+    // private static final int PACKAGE_INFO_RESP = 0x13;
 
     private final ObjectMapper objectMapper;
     private final Map<String, String> orderToPackageMap;
@@ -397,6 +397,7 @@ public class WmsService {
                 DataInputStream in = new DataInputStream(socket.getInputStream());
                 int responseType = in.readInt();
                 int responseLength = in.readInt();
+                logger.info("WMS Package Info responseType: {}", responseType);
 
                 if (responseLength > 0 && responseLength < 10000) {
                     byte[] responsePayload = new byte[responseLength];
