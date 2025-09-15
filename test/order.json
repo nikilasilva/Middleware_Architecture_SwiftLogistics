@@ -1,0 +1,6 @@
+{
+  "orderId": "ORD001",
+  "clientId": "CLIENT001",
+  "pickupAddress": "123 Main St, Colombo",
+  "deliveryAddress": "456 Kandy Road, Kandy"
+}
