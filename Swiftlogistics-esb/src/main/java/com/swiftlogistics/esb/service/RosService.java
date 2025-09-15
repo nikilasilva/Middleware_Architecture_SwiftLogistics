@@ -240,7 +240,7 @@ public class RosService {
                 system);
         return String.format("%s route for order %s updated to %s successfully", system, orderId, status);
     }
-  
+
     // theesh:dev
     public boolean isHealthy() {
         try {
@@ -274,7 +274,109 @@ public class RosService {
         }
     }
 
-     public String cancelRoute(String orderId) {
+    // theesh:dev method 7 -> tracking order :
+    // @GetMapping("/packages/{packageId}/track")
+    public String getPackageRouteInfo(String packageId) {
+        try {
+            logger.info("Getting package route info for package: {}", packageId);
+
+            // Convert packageId to orderId for ROS lookup
+            String orderId = mapPackageIdToOrderId(packageId);
+
+            String[] possibleUrls = {
+                    ROS_API_URL + "/packages/" + packageId + "/route",
+                    ROS_API_URL + "/routes/package/" + packageId,
+                    ROS_API_URL + "/orders/" + orderId + "/route",
+                    ROS_API_URL + "/tracking/" + packageId
+            };
+
+            for (String url : possibleUrls) {
+                try {
+                    String response = restTemplate.getForObject(url, String.class);
+                    return extractPackageRouteInfo(response);
+                } catch (Exception e) {
+                    logger.debug("Failed to get package route info from: {}", url);
+                }
+            }
+
+            return getMockPackageRouteInfo(packageId);
+
+        } catch (Exception e) {
+            logger.error("Error getting package route info: ", e);
+            return getMockPackageRouteInfo(packageId);
+        }
+    }
+
+    private String extractPackageRouteInfo(String jsonResponse) {
+        try {
+            Map<String, Object> response = objectMapper.readValue(jsonResponse,
+                    new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {
+                    });
+
+            StringBuilder info = new StringBuilder();
+
+            if (response.containsKey("route_id")) {
+                info.append("Route: ").append(response.get("route_id"));
+            }
+
+            if (response.containsKey("vehicle_id")) {
+                info.append(", Vehicle: ").append(response.get("vehicle_id"));
+            }
+
+            if (response.containsKey("driver_name")) {
+                info.append(", Driver: ").append(response.get("driver_name"));
+            }
+
+            if (response.containsKey("status")) {
+                info.append(", Status: ").append(response.get("status"));
+            }
+
+            if (response.containsKey("estimated_delivery")) {
+                info.append(", ETA: ").append(response.get("estimated_delivery"));
+            }
+
+            return info.length() > 0 ? info.toString() : getMockPackageRouteInfo(null);
+
+        } catch (Exception e) {
+            logger.warn("Failed to parse package route info response: ", e);
+            return getMockPackageRouteInfo(null);
+        }
+    }
+
+    private String getMockPackageRouteInfo(String packageId) {
+        logger.info("Using mock package route info for packageId: {}", packageId);
+
+        if (packageId == null) {
+            return "Route info unavailable";
+        }
+
+        // Generate mock data based on package ID
+        int hash = Math.abs(packageId.hashCode()) % 4;
+
+        switch (hash) {
+            case 0:
+                return "Route: RT001, Vehicle: VEH001, Driver: Saman Perera, Status: in_progress, ETA: 2024-01-16 14:30";
+            case 1:
+                return "Route: RT002, Vehicle: VEH002, Driver: Nimal Silva, Status: planned, ETA: 2024-01-16 16:00";
+            case 2:
+                return "Route: RT003, Vehicle: VEH003, Driver: Kamala Wijesinghe, Status: completed, Delivered: 2024-01-15 18:45";
+            case 3:
+                return "Route: RT004, Vehicle: VEH001, Driver: Saman Perera, Status: delayed, ETA: 2024-01-16 19:15";
+            default:
+                return "Route: Unknown, Vehicle: Unknown, Driver: Unknown, Status: unknown";
+        }
+    }
+
+    private String mapPackageIdToOrderId(String packageId) {
+        // Simple mapping logic - convert PKG to ORD
+        if (packageId.startsWith("PKG")) {
+            return packageId.replace("PKG", "ORD");
+        }
+        return "ORD" + Math.abs(packageId.hashCode());
+    }
+    // end of method 7
+
+    public String cancelRoute(String orderId) {
         try {
             logger.info("Cancelling ROS route for order: {}", orderId);
 
@@ -285,14 +387,13 @@ public class RosService {
             headers.setContentType(MediaType.APPLICATION_JSON);
 
             HttpEntity<Map<String, String>> request = new HttpEntity<>(requestBody, headers);
-            
+
             // Use DELETE method instead of POST
             String response = restTemplate.exchange(
-                ROS_API_URL + "/routes/cancel", 
-                org.springframework.http.HttpMethod.DELETE, 
-                request, 
-                String.class
-            ).getBody();
+                    ROS_API_URL + "/routes/cancel",
+                    org.springframework.http.HttpMethod.DELETE,
+                    request,
+                    String.class).getBody();
 
             return extractCancelRouteResult(response);
 
