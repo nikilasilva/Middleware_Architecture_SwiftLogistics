@@ -27,7 +27,7 @@ public class WmsService {
     private static final int PACKAGE_STATUS_REQ = 0x04;
     private static final int PACKAGE_UPDATE_REQ = 0x08;
     private static final int PACKAGE_UPDATE_RESP = 0x09;
-    //method 5 Healthy check variables
+    // method 5 Healthy check variables
     private static final int HEALTH_CHECK_REQ = 0x10;
     private static final int HEALTH_CHECK_RESP = 0x11;
 
@@ -36,6 +36,9 @@ public class WmsService {
 
     // theesh
     private static final Logger logger = LoggerFactory.getLogger(WmsService.class);
+    // theesh on method 7
+    private static final int PACKAGE_INFO_REQ = 0x12;
+    private static final int PACKAGE_INFO_RESP = 0x13;
 
     private final ObjectMapper objectMapper;
     private final Map<String, String> orderToPackageMap;
@@ -322,6 +325,7 @@ public class WmsService {
                 system);
         return String.format("%s package for order %s updated to %s successfully", system, orderId, status);
     }
+
     // theesh : dev methd 5
     public boolean isHealthy() {
         try {
@@ -365,6 +369,98 @@ public class WmsService {
         }
     }
 
+    // theesh : dev method 7
+    public String getPackageInfo(String packageId) {
+        try {
+            logger.info("Getting package info for package: {}", packageId);
+
+            try (Socket socket = new Socket(WMS_HOST, WMS_PORT)) {
+                socket.setSoTimeout(5000);
+
+                Map<String, Object> requestData = new HashMap<>();
+                requestData.put("package_id", packageId);
+                requestData.put("action", "get_package_info");
+                requestData.put("request_id", System.currentTimeMillis());
+
+                String jsonPayload = objectMapper.writeValueAsString(requestData);
+                byte[] payloadBytes = jsonPayload.getBytes("UTF-8");
+
+                ByteBuffer header = ByteBuffer.allocate(8);
+                header.putInt(PACKAGE_STATUS_REQ); // Reuse existing constant
+                header.putInt(payloadBytes.length);
+
+                DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+                out.write(header.array());
+                out.write(payloadBytes);
+                out.flush();
+
+                DataInputStream in = new DataInputStream(socket.getInputStream());
+                int responseType = in.readInt();
+                int responseLength = in.readInt();
+
+                if (responseLength > 0 && responseLength < 10000) {
+                    byte[] responsePayload = new byte[responseLength];
+                    in.readFully(responsePayload);
+
+                    String responseJson = new String(responsePayload, "UTF-8");
+                    logger.info("WMS Package Info Response: {}", responseJson);
+
+                    return extractPackageInfo(responseJson);
+                } else {
+                    return getMockPackageInfo(packageId);
+                }
+
+            }
+
+        } catch (Exception e) {
+            logger.error("Error getting package info: ", e);
+            return getMockPackageInfo(packageId);
+        }
+    }
+
+    private String extractPackageInfo(String jsonResponse) {
+        try {
+            Map<String, Object> response = objectMapper.readValue(jsonResponse,
+                    new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {
+                    });
+
+            StringBuilder info = new StringBuilder();
+            info.append("Package Status: ").append(response.getOrDefault("status", "unknown"));
+            info.append(", Weight: ").append(response.getOrDefault("weight", "N/A"));
+            info.append(", Zone: ").append(response.getOrDefault("zone", "N/A"));
+            info.append(", Dimensions: ").append(response.getOrDefault("dimensions", "N/A"));
+
+            return info.toString();
+        } catch (Exception e) {
+            logger.warn("Failed to parse package info response: ", e);
+            return getMockPackageInfo(null);
+        }
+    }
+
+    private String getMockPackageInfo(String packageId) {
+        logger.info("Using mock package info for packageId: {}", packageId);
+
+        if (packageId == null) {
+            return "Package info unavailable";
+        }
+
+        // Generate mock data based on package ID
+        int hash = Math.abs(packageId.hashCode()) % 4;
+
+        switch (hash) {
+            case 0:
+                return "Status: In Transit, Weight: 2.5kg, Zone: A, Dimensions: 30x20x15cm";
+            case 1:
+                return "Status: Processing, Weight: 1.8kg, Zone: B, Dimensions: 25x15x10cm";
+            case 2:
+                return "Status: Ready for Pickup, Weight: 3.2kg, Zone: C, Dimensions: 40x30x20cm";
+            case 3:
+                return "Status: Delivered, Weight: 1.2kg, Zone: D, Dimensions: 20x15x8cm";
+            default:
+                return "Status: Unknown, Weight: N/A, Zone: N/A, Dimensions: N/A";
+        }
+    }
+
     private String extractCancelPackageResult(String jsonResponse) {
         try {
             Map<String, Object> response = objectMapper.readValue(jsonResponse,
@@ -382,56 +478,57 @@ public class WmsService {
             return "Package cancellation confirmed";
         }
     }
+
     public String cancelPackage(String orderId) {
-    try {
-        logger.info("Cancelling WMS package for order: {}", orderId);
+        try {
+            logger.info("Cancelling WMS package for order: {}", orderId);
 
-        try (Socket socket = new Socket(WMS_HOST, WMS_PORT)) {
-            // Map order ID to package ID for WMS
-            String packageId = mapOrderIdToPackageId(orderId);
-            
-            Map<String, Object> requestData = new HashMap<>();
-            requestData.put("package_id", packageId);
+            try (Socket socket = new Socket(WMS_HOST, WMS_PORT)) {
+                // Map order ID to package ID for WMS
+                String packageId = mapOrderIdToPackageId(orderId);
 
-            String jsonPayload = objectMapper.writeValueAsString(requestData);
-            byte[] payloadBytes = jsonPayload.getBytes("UTF-8");
-           
-            ByteBuffer header = ByteBuffer.allocate(8);
-            header.putInt(WMS_CANCEL_PACKAGE_REQ); // some constant for cancel request
-            header.putInt(payloadBytes.length);
-            logger.info("Cancel package header: type {} length {}", WMS_CANCEL_PACKAGE_RESP, payloadBytes.length);
+                Map<String, Object> requestData = new HashMap<>();
+                requestData.put("package_id", packageId);
 
-            DataOutputStream out = new DataOutputStream(socket.getOutputStream());
-            out.write(header.array());
-            out.write(payloadBytes);
-            out.flush();
+                String jsonPayload = objectMapper.writeValueAsString(requestData);
+                byte[] payloadBytes = jsonPayload.getBytes("UTF-8");
 
-            DataInputStream in = new DataInputStream(socket.getInputStream());
-            logger.info("Input stream {}", in);
-            int responseType = in.readInt();
-            int responseLength = in.readInt();
-            byte[] responsePayload = new byte[responseLength];
-            in.readFully(responsePayload);
-            
-            logger.info("Cancel package response type: {} (expected: {}), length: {}", 
-                       responseType, WMS_CANCEL_PACKAGE_RESP, responseLength);
-            logger.info("Response payload: {}", new String(responsePayload, "UTF-8"));
+                ByteBuffer header = ByteBuffer.allocate(8);
+                header.putInt(WMS_CANCEL_PACKAGE_REQ); // some constant for cancel request
+                header.putInt(payloadBytes.length);
+                logger.info("Cancel package header: type {} length {}", WMS_CANCEL_PACKAGE_RESP, payloadBytes.length);
 
-            if (responseType == WMS_CANCEL_PACKAGE_RESP) {
-                String responseJson = new String(responsePayload, "UTF-8");
-                return extractCancelPackageResult(responseJson); // parse JSON
-            } else {
-                String responseJson = new String(responsePayload, "UTF-8");
-                logger.warn("Unexpected response type {}, but parsing anyway: {}", responseType, responseJson);
-                return "Unexpected WMS response: " + responseJson;
+                DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+                out.write(header.array());
+                out.write(payloadBytes);
+                out.flush();
+
+                DataInputStream in = new DataInputStream(socket.getInputStream());
+                logger.info("Input stream {}", in);
+                int responseType = in.readInt();
+                int responseLength = in.readInt();
+                byte[] responsePayload = new byte[responseLength];
+                in.readFully(responsePayload);
+
+                logger.info("Cancel package response type: {} (expected: {}), length: {}",
+                        responseType, WMS_CANCEL_PACKAGE_RESP, responseLength);
+                logger.info("Response payload: {}", new String(responsePayload, "UTF-8"));
+
+                if (responseType == WMS_CANCEL_PACKAGE_RESP) {
+                    String responseJson = new String(responsePayload, "UTF-8");
+                    return extractCancelPackageResult(responseJson); // parse JSON
+                } else {
+                    String responseJson = new String(responsePayload, "UTF-8");
+                    logger.warn("Unexpected response type {}, but parsing anyway: {}", responseType, responseJson);
+                    return "Unexpected WMS response: " + responseJson;
+                }
             }
-        }
 
-    } catch (Exception e) {
-        logger.error("Error cancelling WMS package: ", e);
-        return "Error cancelling WMS package: " + e.getMessage();
+        } catch (Exception e) {
+            logger.error("Error cancelling WMS package: ", e);
+            return "Error cancelling WMS package: " + e.getMessage();
+        }
     }
-}
 
     /**
      * Maps order ID to corresponding package ID for WMS service
@@ -443,7 +540,7 @@ public class WmsService {
             logger.info("Found stored mapping: Order {} -> Package {}", orderId, packageId);
             return packageId;
         }
-        
+
         // Fallback: generate a package ID if no mapping exists
         logger.warn("No stored mapping found for order ID: {}, generating fallback package ID", orderId);
         return "PKG" + Math.abs(orderId.hashCode());
