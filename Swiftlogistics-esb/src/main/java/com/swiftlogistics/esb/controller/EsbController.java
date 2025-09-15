@@ -200,37 +200,89 @@ public class EsbController {
 
             logger.info("Processing order - ID: {}, Client: {}, Delivery: {}", orderId, clientId, deliveryAddress);
 
-            // Use your existing service calls
             Map<String, Object> response = new HashMap<>();
+            Map<String, Boolean> registrationResults = new HashMap<>();
 
-            // Call CMS
+            // 1. Validate client with CMS AND create order record
             String clientValidation = cmsService.fetchClientData(clientId);
             logger.info("Client validation result: {}", clientValidation);
 
-            // Call ROS
-            String rosResponse = rosService.optimizeRoute(deliveryAddress);
-            logger.info("ROS response: {}", rosResponse);
+            if (!clientValidation.contains("Invalid") && !clientValidation.contains("Error")) {
+                // Create order record in CMS
+                DeliveryOrder order = new DeliveryOrder();
+                order.setOrderId(orderId);
+                order.setClientId(clientId);
+                order.setDeliveryAddress(deliveryAddress);
+                order.setPickupAddress(pickupAddress);
 
-            // Call WMS
-            String wmsResponse = wmsService.checkWarehouseStatus();
-            logger.info("WMS response: {}", wmsResponse);
+                try {
+                    String cmsOrderResult = cmsService.createOrder(order);
+                    logger.info("CMS order creation result: {}", cmsOrderResult);
+                    registrationResults.put("CMS", true);
+                } catch (Exception e) {
+                    logger.warn("Failed to create order in CMS: {}", e.getMessage());
+                    registrationResults.put("CMS", false);
+                }
+            } else {
+                registrationResults.put("CMS", false);
+            }
 
-            response.put("success", true);
+            // 2. Create optimized route with ROS (not just optimize)
+            try {
+                String routeResult = rosService.createOptimizedRoute(deliveryAddress, orderId);
+                logger.info("ROS route creation result: {}", routeResult);
+                response.put("routeId", routeResult);
+                registrationResults.put("ROS", true);
+            } catch (Exception e) {
+                logger.warn("Failed to create route in ROS: {}", e.getMessage());
+                response.put("routeId", "Route creation failed: " + e.getMessage());
+                registrationResults.put("ROS", false);
+            }
+
+            // 3. Register package with WMS (not just check status)
+            try {
+                DeliveryOrder order = new DeliveryOrder();
+                order.setOrderId(orderId);
+                order.setClientId(clientId);
+                order.setDeliveryAddress(deliveryAddress);
+                order.setPickupAddress(pickupAddress);
+
+                String wmsResult = wmsService.registerPackage(order);
+                logger.info("WMS package registration result: {}", wmsResult);
+                response.put("wmsStatus", wmsResult);
+                registrationResults.put("WMS", true);
+            } catch (Exception e) {
+                logger.warn("Failed to register package in WMS: {}", e.getMessage());
+                response.put("wmsStatus", "Package registration failed: " + e.getMessage());
+                registrationResults.put("WMS", false);
+            }
+
+            // Determine overall success
+            long successfulRegistrations = registrationResults.values().stream().mapToLong(b -> b ? 1 : 0).sum();
+            boolean overallSuccess = successfulRegistrations >= 2; // At least 2 out of 3 systems should succeed
+
+            response.put("success", overallSuccess);
             response.put("orderId", orderId);
             response.put("clientValidation", clientValidation);
-            response.put("routeId", rosResponse);
-            response.put("wmsStatus", wmsResponse);
+            response.put("registrationResults", registrationResults);
             response.put("processedBy", "ESB");
             response.put("timestamp", System.currentTimeMillis());
 
-            // 🚀 PUBLISH ORDER EVENT TO RABBITMQ
-            DeliveryOrder order = new DeliveryOrder();
-            order.setOrderId(orderId);
-            order.setClientId(clientId);
-            order.setDeliveryAddress(deliveryAddress);
-            order.setPickupAddress(pickupAddress);
+            if (overallSuccess) {
+                // Only publish event if order was successfully registered
+                DeliveryOrder order = new DeliveryOrder();
+                order.setOrderId(orderId);
+                order.setClientId(clientId);
+                order.setDeliveryAddress(deliveryAddress);
+                order.setPickupAddress(pickupAddress);
 
-            publishOrderCreatedEvent(order, response);
+                publishOrderCreatedEvent(order, response);
+                logger.info("Order {} successfully created and registered in {} out of {} systems",
+                        orderId, successfulRegistrations, registrationResults.size());
+            } else {
+                logger.warn("Order {} creation partially failed - only {} out of {} systems succeeded",
+                        orderId, successfulRegistrations, registrationResults.size());
+            }
 
             return ResponseEntity.ok(response);
 
@@ -240,7 +292,6 @@ public class EsbController {
             errorResponse.put("success", false);
             errorResponse.put("error", e.getMessage());
             errorResponse.put("processedBy", "ESB");
-
             return ResponseEntity.internalServerError().body(errorResponse);
         }
     }
@@ -395,6 +446,7 @@ public class EsbController {
     // 10. Emergency order cancellation with smart ID mapping
     @DeleteMapping("/orders/cancel")
     public ResponseEntity<Map<String, Object>> cancelOrder(@RequestParam("orderId") String orderId) {
+        logger.info("ESB received cancellation request for order: {}", orderId);
 
         try {
             Map<String, Object> response = new HashMap<>();
@@ -409,6 +461,10 @@ public class EsbController {
             response.put("cmsResult", cmsResult);
             response.put("rosResult", rosResult);
             response.put("wmsResult", wmsResult);
+
+            // 🚀 PUBLISH ORDER CANCELLATION EVENT TO RABBITMQ
+            publishOrderCancellationEvent(orderId, response);
+            logger.info("Order {} cancelled successfully across all systems", orderId);
 
             return ResponseEntity.ok(response);
 
@@ -455,6 +511,39 @@ public class EsbController {
         } catch (Exception e) {
             logger.error("Failed to publish order created event: ", e);
             // Don't fail the order creation if messaging fails
+        }
+    }
+
+    private void publishOrderCancellationEvent(String orderId, Map<String, Object> cancellationResult) {
+        try {
+            Map<String, Object> event = new HashMap<>();
+            event.put("eventType", "ORDER_CANCELLED");
+            event.put("orderId", orderId);
+            event.put("cancellationResult", cancellationResult);
+            event.put("timestamp", System.currentTimeMillis());
+            event.put("source", "ESB");
+
+            // Publish to different queues for different services
+
+            // 1. Notification Service Queue - Send cancellation confirmation
+            rabbitTemplate.convertAndSend("order.notifications.exchange", "order.cancelled", event);
+            logger.info("📧 Published ORDER_CANCELLED event to notification service for order: {}", orderId);
+
+            // 2. Route Service Queue - Stop route optimization
+            rabbitTemplate.convertAndSend("order.routing.exchange", "route.cancelled", event);
+            logger.info("🛣️ Published ROUTE_CANCELLED event to route service for order: {}", orderId);
+
+            // 3. Warehouse Service Queue - Release package resources
+            rabbitTemplate.convertAndSend("order.warehouse.exchange", "package.cancelled", event);
+            logger.info("📦 Published PACKAGE_CANCELLED event to warehouse service for order: {}", orderId);
+
+            // 4. General Order Events Queue - Track cancellation
+            rabbitTemplate.convertAndSend("order.events.exchange", "order.lifecycle", event);
+            logger.info("📋 Published ORDER_CANCELLATION_LIFECYCLE event for order: {}", orderId);
+
+        } catch (Exception e) {
+            logger.error("Failed to publish order cancellation event: ", e);
+            // Don't fail the cancellation if messaging fails
         }
     }
 

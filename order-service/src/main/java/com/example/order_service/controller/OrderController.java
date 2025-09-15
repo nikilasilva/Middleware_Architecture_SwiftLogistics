@@ -6,6 +6,7 @@ import com.example.order_service.model.CreateOrderRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -36,7 +37,7 @@ public class OrderController {
 
         try {
             // Generate unique order ID
-            String orderId = "ORD" + System.currentTimeMillis();
+            String orderId = request.getOrderId();
 
             // Prepare request for ESB
             Map<String, Object> esbRequest = new HashMap<>();
@@ -337,5 +338,40 @@ public class OrderController {
             return orderId.replace("ORD", "PKG");
         }
         return "PKG" + orderId;
+    }
+
+    @DeleteMapping("/{orderId}/cancel")
+    public ResponseEntity<Map<String, Object>> cancelOrder(@PathVariable String orderId) {
+        logger.info("Order Service received cancellation request for order: {}", orderId);
+
+        try {
+            // Call ESB to cancel order across all systems
+            ResponseEntity<Map<String, Object>> esbResponse = esbClient.cancelOrder(orderId);
+            Map<String, Object> responseBody = esbResponse.getBody();
+
+            // Add Order Service metadata
+            if (responseBody != null) {
+                responseBody.put("cancelledBy", "order-service");
+                responseBody.put("cancellationTimestamp", System.currentTimeMillis());
+
+                // Add customer-friendly message
+                if (Boolean.TRUE.equals(responseBody.get("success"))) {
+                    responseBody.put("customerMessage", "Your order has been successfully cancelled");
+                }
+            }
+
+            logger.info("Successfully cancelled order: {}", orderId);
+            return ResponseEntity.ok(responseBody);
+
+        } catch (Exception e) {
+            logger.error("Failed to cancel order {} through ESB: ", orderId, e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("orderId", orderId);
+            errorResponse.put("error", "Order cancellation failed: " + e.getMessage());
+            errorResponse.put("cancelledBy", "order-service");
+            errorResponse.put("cancellationTimestamp", System.currentTimeMillis());
+            return ResponseEntity.status(500).body(errorResponse);
+        }
     }
 }
