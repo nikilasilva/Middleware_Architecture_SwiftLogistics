@@ -2,5 +2,22 @@
   "orderId": "ORD001",
   "clientId": "CLIENT001",
   "pickupAddress": "123 Main St, Colombo",
-  "deliveryAddress": "456 Kandy Road, Kandy"
+  "deliveryAddress": "456 Kandy Road, Kandy",
+  "recipientName": "John Doe",
+  "recipientPhone": "+94-77-123-4567",
+  "items": [
+    {
+      "itemId": "ITEM001",
+      "description": "Wireless Mouse",
+      "quantity": 2,
+      "weightKg": 0.2
+    },
+    {
+      "itemId": "ITEM002", 
+      "description": "Keyboard",
+      "quantity": 1,
+      "weightKg": 0.8
+    }
+  ],
+  "notes": "Leave at the front desk if not home"
 }

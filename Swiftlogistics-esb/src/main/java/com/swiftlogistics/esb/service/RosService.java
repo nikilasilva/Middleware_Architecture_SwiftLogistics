@@ -48,14 +48,21 @@ public class RosService {
         }
     }
 
-    public String createOptimizedRoute(String deliveryAddress, String orderId) {
+    // NEW: Overloaded method that accepts weight for vehicle selection
+    public String createOptimizedRoute(String deliveryAddress, String orderId, Double totalWeight) {
         try {
-            logger.info("Creating optimized route for order: {} to {}", orderId, deliveryAddress);
+            logger.info("Creating optimized route for order: {} to {} with weight: {}kg", orderId, deliveryAddress,
+                    totalWeight);
 
             Map<String, Object> requestBody = new HashMap<>();
-            requestBody.put("vehicle_id", "VEH001");
-            requestBody.put("delivery_addresses", createDeliveryAddressesWithOrderId(deliveryAddress, orderId));
-            requestBody.put("priority", "normal");
+
+            // Select appropriate vehicle based on weight
+            String vehicleId = selectVehicleByWeight(totalWeight);
+            requestBody.put("vehicle_id", vehicleId);
+            requestBody.put("delivery_addresses",
+                    createDeliveryAddressesWithWeight(deliveryAddress, orderId, totalWeight));
+            requestBody.put("priority", determinePriorityByWeight(totalWeight));
+            requestBody.put("cargo_weight", totalWeight);
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -63,10 +70,90 @@ public class RosService {
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
             String response = restTemplate.postForObject(ROS_API_URL + "/routes/optimize", request, String.class);
 
-            return extractRouteId(response);
+            return extractRouteIdWithWeight(response, totalWeight);
         } catch (Exception e) {
-            logger.error("Error creating optimized route: ", e);
+            logger.error("Error creating optimized route with weight: ", e);
             return "Error creating route: " + e.getMessage();
+        }
+    }
+
+    // Keep the existing 2-parameter method for backward compatibility
+    public String createOptimizedRoute(String deliveryAddress, String orderId) {
+        return createOptimizedRoute(deliveryAddress, orderId, 0.0); // Default weight
+    }
+
+    // Helper method to select vehicle based on weight
+    private String selectVehicleByWeight(Double weight) {
+        if (weight == null || weight <= 0) {
+            return "VEH003"; // Default bike for unknown/light weight
+        } else if (weight <= 5.0) {
+            return "VEH003"; // Bike for light packages (≤5kg)
+        } else if (weight <= 50.0) {
+            return "VEH001"; // Van for medium packages (5-50kg)
+        } else {
+            return "VEH002"; // Truck for heavy packages (>50kg)
+        }
+    }
+
+    // Helper method to determine priority based on weight
+    private String determinePriorityByWeight(Double weight) {
+        if (weight == null || weight <= 0) {
+            return "normal";
+        } else if (weight <= 2.0) {
+            return "express"; // Light packages can be express
+        } else if (weight <= 20.0) {
+            return "normal";
+        } else {
+            return "bulk"; // Heavy packages are bulk delivery
+        }
+    }
+
+    // Helper method to create delivery addresses with weight information
+    private Object[] createDeliveryAddressesWithWeight(String address, String orderId, Double weight) {
+        Map<String, Object> deliveryAddress = new HashMap<>();
+        deliveryAddress.put("address", address);
+        deliveryAddress.put("lat", 6.9271);
+        deliveryAddress.put("lng", 79.8612);
+        deliveryAddress.put("order_id", orderId);
+        deliveryAddress.put("package_weight", weight != null ? weight : 0.0);
+        deliveryAddress.put("delivery_type", determinePriorityByWeight(weight));
+
+        return new Object[] { deliveryAddress };
+    }
+
+    // Helper method to extract route ID with weight context
+    private String extractRouteIdWithWeight(String jsonResponse, Double weight) {
+        try {
+            Map<String, Object> response = objectMapper.readValue(jsonResponse,
+                    new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {
+                    });
+
+            String routeId = "RT" + System.currentTimeMillis();
+            if (response.containsKey("route_id")) {
+                routeId = (String) response.get("route_id");
+            }
+
+            String vehicleType = selectVehicleTypeDescription(weight);
+            return String.format("Route optimized for %.1fkg load: %s (Vehicle: %s)",
+                    weight != null ? weight : 0.0, routeId, vehicleType);
+
+        } catch (Exception e) {
+            logger.error("Error parsing route response with weight: ", e);
+            return String.format("Route created for %.1fkg load: RT%d",
+                    weight != null ? weight : 0.0, System.currentTimeMillis());
+        }
+    }
+
+    // Helper method to get vehicle type description
+    private String selectVehicleTypeDescription(Double weight) {
+        if (weight == null || weight <= 0) {
+            return "Bike";
+        } else if (weight <= 5.0) {
+            return "Bike";
+        } else if (weight <= 50.0) {
+            return "Van";
+        } else {
+            return "Truck";
         }
     }
 
@@ -95,29 +182,29 @@ public class RosService {
         }
     }
 
-    private Object[] createDeliveryAddressesWithOrderId(String address, String orderId) {
-        Map<String, Object> deliveryAddress = new HashMap<>();
-        deliveryAddress.put("address", address);
-        deliveryAddress.put("lat", 6.9271);
-        deliveryAddress.put("lng", 79.8612);
-        deliveryAddress.put("order_id", orderId);
+    // private Object[] createDeliveryAddressesWithOrderId(String address, String orderId) {
+    //     Map<String, Object> deliveryAddress = new HashMap<>();
+    //     deliveryAddress.put("address", address);
+    //     deliveryAddress.put("lat", 6.9271);
+    //     deliveryAddress.put("lng", 79.8612);
+    //     deliveryAddress.put("order_id", orderId);
 
-        return new Object[] { deliveryAddress };
-    }
+    //     return new Object[] { deliveryAddress };
+    // }
 
-    private String extractRouteId(String jsonResponse) {
-        try {
-            Map<String, Object> response = objectMapper.readValue(jsonResponse,
-                    new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {
-                    });
-            if (response.containsKey("route_id")) {
-                return (String) response.get("route_id");
-            }
-            return "RT" + System.currentTimeMillis();
-        } catch (Exception e) {
-            return "RT" + System.currentTimeMillis();
-        }
-    }
+    // private String extractRouteId(String jsonResponse) {
+    //     try {
+    //         Map<String, Object> response = objectMapper.readValue(jsonResponse,
+    //                 new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {
+    //                 });
+    //         if (response.containsKey("route_id")) {
+    //             return (String) response.get("route_id");
+    //         }
+    //         return "RT" + System.currentTimeMillis();
+    //     } catch (Exception e) {
+    //         return "RT" + System.currentTimeMillis();
+    //     }
+    // }
 
     // added missing methods on rosService.getRouteStatus(orderId) : dev theesh
     // Add this method to RosService.java
