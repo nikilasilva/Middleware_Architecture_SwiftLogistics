@@ -5,6 +5,7 @@ public class CreateOrderRequest {
     private String pickupAddress;
     private String deliveryAddress;
     private String packageDetails;
+    private String orderId;
     
     // Default constructor
     public CreateOrderRequest() {}
@@ -21,6 +22,9 @@ public class CreateOrderRequest {
     
     public String getPackageDetails() { return packageDetails; }
     public void setPackageDetails(String packageDetails) { this.packageDetails = packageDetails; }
+
+    public String getOrderId() { return orderId; }
+    public void setOrderId(String orderId) { this.orderId = orderId; }
     
     @Override
     public String toString() {
