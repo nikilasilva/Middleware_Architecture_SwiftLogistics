@@ -7,6 +7,7 @@ import { OrderData } from "@/types";
 import { cancelOrder, fetchOrdersByClient } from "@/lib/ordersApi";
 import { ApiOrder } from "@/types/order";
 import ConfirmationModal from "./ConfirmationModal";
+import SuccessModal from "./SuccessModal";
 
 interface Order extends OrderData {
   id: string;
@@ -45,6 +46,8 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [orderToCancel, setOrderToCancel] = useState<string>("");
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
 
   // Get clientId from cookie
   const clientId = getCookie('clientId');
@@ -230,8 +233,9 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
           )
         );
 
-        // Show success message (you can also create a success modal for this)
-        alert(result.message || "Order cancelled successfully!");
+        // Show success message
+        setSuccessMessage(result.message || "Order cancelled successfully!");
+        setShowSuccessModal(true);
       } else {
         throw new Error(result.error || "Failed to cancel order");
       }
@@ -499,6 +503,13 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
         confirmButtonColor="bg-red-600 hover:bg-red-700 focus:ring-red-500"
         onConfirm={handleConfirmCancel}
         onCancel={handleCancelFromModal}
+      />
+
+      <SuccessModal
+        isOpen={showSuccessModal}
+        title="Order Cancelled"
+        message={successMessage}
+        onClose={() => setShowSuccessModal(false)}
       />
     </div>
   );
