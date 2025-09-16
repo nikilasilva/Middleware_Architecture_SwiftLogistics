@@ -4,6 +4,8 @@ import StatusStepper from "./StatusStepper";
 import EditOrder from "./EditOrder";
 import { useState, useEffect } from "react";
 import { OrderData } from "@/types";
+import { fetchOrdersByClient } from "@/lib/ordersApi";
+import { ApiOrder } from "@/types/order";
 
 interface Order extends OrderData {
   id: string;
@@ -26,6 +28,14 @@ interface TrackOrdersProps {
   onBack: () => void;
 }
 
+// Helper function to get a cookie value
+function getCookie(name: string): string {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop()?.split(';').shift() || '';
+  return '';
+}
+
 export default function TrackOrders({ onBack }: TrackOrdersProps) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,75 +43,129 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
 
-  useEffect(() => {
-    fetchOrders();
-  }, []);
+  // Get clientId from cookie
+  const clientId = getCookie('clientId');
 
-  const fetchOrders = async () => {
-    try {
-      setLoading(true);
-      // Replace with actual API call
-      const mockOrders: Order[] = [
-        {
-          id: "1",
-          clientId: "CLIENT001",
-          recipientName: "John Doe",
-          recipientAddress: "123 Main St, Colombo",
-          recipientPhone: "+94-77-123-4567",
-          packageDetails: "#1: Wireless Mouse (ID: ITEM001, Qty: 2, Weight: 0.2kg); #2: Keyboard (ID: ITEM002, Qty: 1, Weight: 0.8kg)",
-          status: "in_transit",
-          createdAt: "2024-01-15T10:30:00Z",
-          estimatedDelivery: "2024-01-16T15:00:00Z",
-          trackingNumber: "SL001234",
-          driverName: "Saman Silva",
-          vehicleId: "VH001",
-          items: [
-            { itemId: "ITEM001", description: "Wireless Mouse", quantity: 2, weightKg: 0.2 },
-            { itemId: "ITEM002", description: "Keyboard", quantity: 1, weightKg: 0.8 }
-          ],
-          notes: "Leave at the front desk if not home"
-        },
-        {
-          id: "2",
-          clientId: "CLIENT002",
-          recipientName: "Jane Smith",
-          recipientAddress: "456 Galle Road, Kandy",
-          recipientPhone: "+94-71-987-6543",
-          packageDetails: "#1: T-shirt (ID: ITEM003, Qty: 3, Weight: 0.15kg)",
-          status: "delivered",
-          createdAt: "2024-01-14T08:15:00Z",
-          estimatedDelivery: "2024-01-15T12:00:00Z",
-          trackingNumber: "SL001235",
-          driverName: "Kamal Perera",
-          vehicleId: "VH002",
-          items: [
-            { itemId: "ITEM003", description: "T-shirt", quantity: 3, weightKg: 0.15 }
-          ],
-          notes: "Ring the bell twice"
-        },
-        {
-          id: "3",
-          clientId: "CLIENT001",
-          recipientName: "Bob Johnson",
-          recipientAddress: "789 Hill Street, Galle",
-          recipientPhone: "+94-75-555-1234",
-          packageDetails: "#1: Mobile Phone Case (ID: ITEM004, Qty: 1, Weight: 0.05kg)",
-          status: "pending",
-          createdAt: "2024-01-16T14:20:00Z",
-          trackingNumber: "SL001236",
-          items: [
-            { itemId: "ITEM004", description: "Mobile Phone Case", quantity: 1, weightKg: 0.05 }
-          ],
-          notes: "Call before delivery"
-        },
-      ];
-      setOrders(mockOrders);
-    } catch (error) {
-      console.error("Error fetching orders:", error);
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    async function loadOrders() {
+      try {
+        setLoading(true);
+
+        if (!clientId) {
+          console.error("No client ID found in cookie");
+          setOrders([]);
+          return;
+        }
+
+        const data = await fetchOrdersByClient(clientId);
+
+        // Transform the data to match your Order interface with proper typing
+        const transformedOrders: Order[] = data.orders.map((order: ApiOrder) => ({
+          id: order.orderId || order.internalOrderId || '',
+          clientId: order.clientId || clientId,
+          recipientName: order.recipient || order.recipientName || '',
+          recipientAddress: order.address || order.recipientAddress || '',
+          recipientPhone: order.phone || order.recipientPhone || '',
+          packageDetails: order.packageDetails || '',
+          status: mapStatus(order.status || order.overallStatus || 'PENDING'),
+          createdAt: order.createdAt || new Date().toISOString(),
+          estimatedDelivery: order.estimatedDelivery,
+          trackingNumber: order.trackingNumber || order.orderId || '',
+          driverName: order.driverName,
+          vehicleId: order.vehicleId,
+          items: order.items || [],
+          notes: order.notes
+        }));
+
+        setOrders(transformedOrders);
+      } catch (error) {
+        console.error("Failed to fetch orders:", error);
+        setOrders([]);
+      } finally {
+        setLoading(false);
+      }
     }
-  };
+    loadOrders();
+  }, [clientId]);
+
+  function mapStatus(backendStatus: string): "pending" | "assigned" | "in_transit" | "delivered" | "cancelled" {
+    const statusMap: Record<string, "pending" | "assigned" | "in_transit" | "delivered" | "cancelled"> = {
+      'PENDING': 'pending',
+      'PROCESSING': 'assigned',
+      'ASSIGNED': 'assigned',
+      'IN_TRANSIT': 'in_transit',
+      'DELIVERED': 'delivered',
+      'CANCELLED': 'cancelled'
+    };
+
+    return statusMap[backendStatus.toUpperCase()] || 'pending';
+  }
+
+  // const fetchOrders = async () => {
+  //   try {
+  //     setLoading(true);
+  //     // Replace with actual API call
+  //     const mockOrders: Order[] = [
+  //       {
+  //         id: "1",
+  //         clientId: "CLIENT001",
+  //         recipientName: "John Doe",
+  //         recipientAddress: "123 Main St, Colombo",
+  //         recipientPhone: "+94-77-123-4567",
+  //         packageDetails: "#1: Wireless Mouse (ID: ITEM001, Qty: 2, Weight: 0.2kg); #2: Keyboard (ID: ITEM002, Qty: 1, Weight: 0.8kg)",
+  //         status: "in_transit",
+  //         createdAt: "2024-01-15T10:30:00Z",
+  //         estimatedDelivery: "2024-01-16T15:00:00Z",
+  //         trackingNumber: "SL001234",
+  //         driverName: "Saman Silva",
+  //         vehicleId: "VH001",
+  //         items: [
+  //           { itemId: "ITEM001", description: "Wireless Mouse", quantity: 2, weightKg: 0.2 },
+  //           { itemId: "ITEM002", description: "Keyboard", quantity: 1, weightKg: 0.8 }
+  //         ],
+  //         notes: "Leave at the front desk if not home"
+  //       },
+  //       {
+  //         id: "2",
+  //         clientId: "CLIENT002",
+  //         recipientName: "Jane Smith",
+  //         recipientAddress: "456 Galle Road, Kandy",
+  //         recipientPhone: "+94-71-987-6543",
+  //         packageDetails: "#1: T-shirt (ID: ITEM003, Qty: 3, Weight: 0.15kg)",
+  //         status: "delivered",
+  //         createdAt: "2024-01-14T08:15:00Z",
+  //         estimatedDelivery: "2024-01-15T12:00:00Z",
+  //         trackingNumber: "SL001235",
+  //         driverName: "Kamal Perera",
+  //         vehicleId: "VH002",
+  //         items: [
+  //           { itemId: "ITEM003", description: "T-shirt", quantity: 3, weightKg: 0.15 }
+  //         ],
+  //         notes: "Ring the bell twice"
+  //       },
+  //       {
+  //         id: "3",
+  //         clientId: "CLIENT001",
+  //         recipientName: "Bob Johnson",
+  //         recipientAddress: "789 Hill Street, Galle",
+  //         recipientPhone: "+94-75-555-1234",
+  //         packageDetails: "#1: Mobile Phone Case (ID: ITEM004, Qty: 1, Weight: 0.05kg)",
+  //         status: "pending",
+  //         createdAt: "2024-01-16T14:20:00Z",
+  //         trackingNumber: "SL001236",
+  //         items: [
+  //           { itemId: "ITEM004", description: "Mobile Phone Case", quantity: 1, weightKg: 0.05 }
+  //         ],
+  //         notes: "Call before delivery"
+  //       },
+  //     ];
+  //     setOrders(mockOrders);
+  //   } catch (error) {
+  //     console.error("Error fetching orders:", error);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
 
   const handleEditOrder = (order: Order) => {
     if (order.status === "pending") {
@@ -122,8 +186,8 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
 
     console.log("Saving order:", orderWithUpdatedDetails);
 
-    setOrders(prev => 
-      prev.map(order => 
+    setOrders(prev =>
+      prev.map(order =>
         order.id === orderWithUpdatedDetails.id ? orderWithUpdatedDetails : order
       )
     );
@@ -136,8 +200,8 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
 
   const handleCancelOrder = (orderId: string) => {
     console.log("Cancelling order ID:", orderId);
-    setOrders(prev => 
-      prev.map(order => 
+    setOrders(prev =>
+      prev.map(order =>
         order.id === orderId ? { ...order, status: "cancelled" } : order
       )
     );
@@ -237,8 +301,8 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
               </div>
             ) : (
               filteredOrders.map((order) => (
-                <div 
-                  key={order.id} 
+                <div
+                  key={order.id}
                   className={`card p-6 cursor-pointer transition-all ${order.status === "pending" ? "hover:shadow-md" : ""}`}
                   onClick={() => handleEditOrder(order)}
                 >
@@ -274,7 +338,7 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
                         <div className="mb-1 text-gray-600">
                           <strong>Items:</strong>
                           <ul className="ml-4 list-disc">
-                            {order.items.map((item, idx) => (
+                            {order.items.map((item) => (
                               <li key={item.itemId}>
                                 {item.description} (ID: {item.itemId}, Qty: {item.quantity}, Weight: {item.weightKg}kg)
                               </li>
@@ -316,7 +380,7 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
                       </div>
                       <div className="flex flex-col gap-2">
                         {order.driverName && (
-                          <button 
+                          <button
                             className="btn-secondary text-sm py-1 w-full"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -328,7 +392,7 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
                         )}
                         {/* Cancel Order Button */}
                         {order.status !== "cancelled" && order.status !== "delivered" && (
-                          <button 
+                          <button
                             className="text-sm py-1 w-full border border-red-500 text-red-500 rounded hover:bg-red-50 transition-colors"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -376,8 +440,8 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
 
       {/* Edit Order Modal */}
       {editingOrder && (
-        <EditOrder 
-          order={editingOrder} 
+        <EditOrder
+          order={editingOrder}
           onSave={handleSaveOrder}
           onCancel={handleCancelEdit}
         />

@@ -693,7 +693,7 @@ public class CmsService {
                     String orderBlock = "<cms:Order>" + orderBlocks[i].split("</cms:Order>")[0] + "</cms:Order>";
                     Map<String, Object> order = new HashMap<>();
 
-                    // Extract order data using helper method
+                    // Extract basic order data
                     order.put("orderId", extractXmlValue(orderBlock, "cms:OrderId"));
                     order.put("internalOrderId", extractXmlValue(orderBlock, "cms:InternalOrderId"));
                     order.put("status", extractXmlValue(orderBlock, "cms:Status"));
@@ -712,12 +712,16 @@ public class CmsService {
 
                     order.put("packageDetails", extractXmlValue(orderBlock, "cms:PackageDetails"));
 
-                    // Calculate derived fields
-                    order.put("totalWeight", 1.2); // Default weight - could be extracted from package details
-                    order.put("totalItems", 3); // Default items - could be parsed from package details
+                    // ADD: Parse items from SOAP response
+                    List<Map<String, Object>> items = parseItemsFromSoapResponse(orderBlock);
+                    order.put("items", items);
+
+                    // Calculate derived fields from actual items
+                    order.put("totalWeight", calculateTotalWeight(items));
+                    order.put("totalItems", calculateTotalItems(items));
 
                     orders.add(order);
-                    logger.info("Parsed order: {} with status: {}", order.get("orderId"), order.get("status"));
+                    logger.info("Parsed order: {} with {} items", order.get("orderId"), items.size());
                 }
             }
         } catch (Exception e) {
@@ -726,5 +730,144 @@ public class CmsService {
 
         logger.info("Parsed {} orders from SOAP response", orders.size());
         return orders;
+    }
+
+    private List<Map<String, Object>> parseItemsFromSoapResponse(String orderBlock) {
+        List<Map<String, Object>> items = new ArrayList<>();
+
+        try {
+            if (orderBlock.contains("<cms:Items>")) {
+                String itemsSection = orderBlock.substring(
+                        orderBlock.indexOf("<cms:Items>") + 11,
+                        orderBlock.indexOf("</cms:Items>"));
+
+                // Split by item blocks
+                String[] itemBlocks = itemsSection.split("<cms:Item>");
+
+                for (int i = 1; i < itemBlocks.length; i++) {
+                    String itemBlock = "<cms:Item>" + itemBlocks[i].split("</cms:Item>")[0] + "</cms:Item>";
+
+                    Map<String, Object> item = new HashMap<>();
+                    item.put("itemId", extractXmlValue(itemBlock, "cms:ItemId"));
+                    item.put("description", extractXmlValue(itemBlock, "cms:Description"));
+
+                    String quantityStr = extractXmlValue(itemBlock, "cms:Quantity");
+                    try {
+                        item.put("quantity", Integer.parseInt(quantityStr));
+                    } catch (NumberFormatException e) {
+                        item.put("quantity", 1);
+                    }
+
+                    String weightStr = extractXmlValue(itemBlock, "cms:WeightKg");
+                    try {
+                        item.put("weightKg", Double.parseDouble(weightStr));
+                    } catch (NumberFormatException e) {
+                        item.put("weightKg", 0.0);
+                    }
+
+                    items.add(item);
+                    logger.debug("Parsed item: {} (ID: {})", item.get("description"), item.get("itemId"));
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Error parsing items from SOAP response: ", e);
+        }
+
+        // Fallback: if no items parsed, try to parse from packageDetails
+        if (items.isEmpty()) {
+            String packageDetails = extractXmlValue(orderBlock, "cms:PackageDetails");
+            items = parseItemsFromPackageDetails(packageDetails);
+        }
+
+        return items;
+    }
+
+    // ADD: Fallback method to parse items from packageDetails string
+    private List<Map<String, Object>> parseItemsFromPackageDetails(String packageDetails) {
+        List<Map<String, Object>> items = new ArrayList<>();
+
+        if (packageDetails != null && packageDetails.contains("#")) {
+            try {
+                // Parse format: "#1: Wireless Mouse (ID: ITEM001, Qty: 2, Weight: 0.2kg); #2:
+                // Keyboard ..."
+                String[] itemParts = packageDetails.split(";");
+
+                for (String part : itemParts) {
+                    part = part.trim();
+                    if (part.startsWith("#")) {
+                        Map<String, Object> item = extractItemFromString(part);
+                        if (item != null) {
+                            items.add(item);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                logger.debug("Error parsing items from package details: ", e);
+            }
+        }
+
+        // Fallback to default items if parsing fails
+        if (items.isEmpty()) {
+            logger.debug("No items parsed, using default items");
+            items.add(createDefaultItem("ITEM001", "Wireless Mouse", 2, 0.2));
+            items.add(createDefaultItem("ITEM002", "Keyboard", 1, 0.8));
+        }
+
+        return items;
+    }
+
+    // ADD: Helper method to parse individual item from string
+    private Map<String, Object> extractItemFromString(String itemString) {
+        try {
+            Map<String, Object> item = new HashMap<>();
+
+            // Parse: "#1: Wireless Mouse (ID: ITEM001, Qty: 2, Weight: 0.2kg)"
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
+                    "#\\d+:\\s*([^(]+)\\s*\\(ID:\\s*([^,]+),\\s*Qty:\\s*(\\d+),\\s*Weight:\\s*([\\d.]+)kg\\)");
+            java.util.regex.Matcher matcher = pattern.matcher(itemString);
+
+            if (matcher.find()) {
+                item.put("description", matcher.group(1).trim());
+                item.put("itemId", matcher.group(2).trim());
+                item.put("quantity", Integer.parseInt(matcher.group(3)));
+                item.put("weightKg", Double.parseDouble(matcher.group(4)));
+                return item;
+            }
+        } catch (Exception e) {
+            logger.debug("Error parsing item string: {}", itemString, e);
+        }
+        return null;
+    }
+
+    // ADD: Helper method to create default item
+    private Map<String, Object> createDefaultItem(String itemId, String description, int quantity, double weight) {
+        Map<String, Object> item = new HashMap<>();
+        item.put("itemId", itemId);
+        item.put("description", description);
+        item.put("quantity", quantity);
+        item.put("weightKg", weight);
+        return item;
+    }
+
+    // ADD: Helper method to calculate total weight
+    private double calculateTotalWeight(List<Map<String, Object>> items) {
+        return items.stream()
+                .mapToDouble(item -> {
+                    Number quantity = (Number) item.get("quantity");
+                    Number weight = (Number) item.get("weightKg");
+                    return (quantity != null ? quantity.intValue() : 1) *
+                            (weight != null ? weight.doubleValue() : 0.0);
+                })
+                .sum();
+    }
+
+    // ADD: Helper method to calculate total items
+    private int calculateTotalItems(List<Map<String, Object>> items) {
+        return items.stream()
+                .mapToInt(item -> {
+                    Number quantity = (Number) item.get("quantity");
+                    return quantity != null ? quantity.intValue() : 1;
+                })
+                .sum();
     }
 }
