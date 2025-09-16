@@ -9,6 +9,7 @@ import { ApiOrder } from "@/types/order";
 import ConfirmationModal from "./ConfirmationModal";
 import SuccessModal from "./SuccessModal";
 import OrderStatusModal from "./OrderStatusModal";
+import CancelledOrderModal from "./CancelledOrderModalProps";
 
 interface Order extends OrderData {
   id: string;
@@ -51,6 +52,8 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
   const [successMessage, setSuccessMessage] = useState("");
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [selectedOrderForStatus, setSelectedOrderForStatus] = useState<Order | null>(null);
+  const [showCancelledModal, setShowCancelledModal] = useState(false);
+  const [cancelledOrderNumber, setCancelledOrderNumber] = useState("");
 
   // Get clientId from cookie
   const clientId = getCookie('clientId');
@@ -181,8 +184,9 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
     if (order.status === "pending") {
       setEditingOrder(order);
     } else if (order.status === "cancelled") {
-      // For cancelled orders, don't show status details - just show a message
-      alert("This order has been cancelled. No status details available.");
+      // For cancelled orders
+      setCancelledOrderNumber(order.trackingNumber);
+      setShowCancelledModal(true);
       return;
     } else {
       // For non-pending, non-cancelled orders, show status details
@@ -539,6 +543,13 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
           onCancel={handleCancelEdit}
         />
       )}
+
+      {/* Cancelled Order Modal */}
+      <CancelledOrderModal
+        isOpen={showCancelledModal}
+        orderNumber={cancelledOrderNumber}
+        onClose={() => setShowCancelledModal(false)}
+      />
 
       <ConfirmationModal
         isOpen={showCancelModal}
