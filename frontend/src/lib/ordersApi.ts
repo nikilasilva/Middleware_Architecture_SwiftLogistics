@@ -37,3 +37,32 @@ export async function cancelOrder(orderId: string): Promise<{
 
   return res.json();
 }
+
+// Get order status function
+export async function getOrderStatus(orderId: string): Promise<{
+  success: boolean;
+  orderId: string;
+  cmsStatus?: string;
+  wmsStatus?: string;
+  rosStatus?: string;
+  overallStatus?: string;
+  customerMessage?: string;
+  warehouseInfo?: string;
+  routeInfo?: string;
+  clientInfo?: string;
+  estimatedDelivery?: string;
+  lastUpdated?: string;
+  queriedBy?: string;
+  queryTimestamp?: number;
+  error?: string;
+}> {
+  const res = await fetch(`http://localhost:8089/api/orders/${orderId}/status`);
+
+  if (!res.ok) {
+    throw new Error(
+      `Failed to get order status: ${res.status} ${res.statusText}`
+    );
+  }
+
+  return res.json();
+}

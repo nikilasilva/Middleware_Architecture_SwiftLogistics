@@ -8,6 +8,7 @@ import { cancelOrder, fetchOrdersByClient } from "@/lib/ordersApi";
 import { ApiOrder } from "@/types/order";
 import ConfirmationModal from "./ConfirmationModal";
 import SuccessModal from "./SuccessModal";
+import OrderStatusModal from "./OrderStatusModal";
 
 interface Order extends OrderData {
   id: string;
@@ -48,6 +49,8 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
   const [orderToCancel, setOrderToCancel] = useState<string>("");
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [selectedOrderForStatus, setSelectedOrderForStatus] = useState<Order | null>(null);
 
   // Get clientId from cookie
   const clientId = getCookie('clientId');
@@ -174,9 +177,24 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
   // };
 
   const handleEditOrder = (order: Order) => {
+    // Only allow editing for pending orders
     if (order.status === "pending") {
       setEditingOrder(order);
+    } else if (order.status === "cancelled") {
+      // For cancelled orders, don't show status details - just show a message
+      alert("This order has been cancelled. No status details available.");
+      return;
+    } else {
+      // For non-pending, non-cancelled orders, show status details
+      setSelectedOrderForStatus(order);
+      setShowStatusModal(true);
     }
+  };
+
+  // Handler for status modal close
+  const handleCloseStatusModal = () => {
+    setShowStatusModal(false);
+    setSelectedOrderForStatus(null);
   };
 
   const handleSaveOrder = (updatedOrder: Order) => {
@@ -350,22 +368,35 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
               filteredOrders.map((order) => (
                 <div
                   key={order.id}
-                  className={`card p-6 cursor-pointer transition-all ${order.status === "pending" ? "hover:shadow-md" : ""}`}
+                  className={`card p-6 cursor-pointer transition-all hover:shadow-md ${order.status === "pending"
+                    ? "hover:border-blue-300"
+                    : "hover:border-green-300"
+                    }`}
                   onClick={() => handleEditOrder(order)}
                 >
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Column 1: Order Info - JSON details */}
                     <div>
+
                       <div className="flex items-center justify-between mb-2">
                         <h3 className="text-lg font-semibold">
                           Tracking: {order.trackingNumber}
                         </h3>
-                        {order.status === "pending" && (
+                        {order.status === "pending" ? (
                           <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
                             Click to edit
                           </span>
+                        ) : order.status === "cancelled" ? (
+                          <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
+                            Order cancelled
+                          </span>
+                        ) : (
+                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                            Click for status details
+                          </span>
                         )}
                       </div>
+
                       <div className="mb-1 text-gray-600">
                         <strong>Client ID:</strong> {order.clientId}
                       </div>
@@ -426,6 +457,21 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
                         </div>
                       </div>
                       <div className="flex flex-col gap-2">
+
+                        {/* Status Details Button */}
+                        {order.status !== "cancelled" && (
+                          <button
+                            className="btn-secondary text-sm py-1 w-full"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedOrderForStatus(order);
+                              setShowStatusModal(true);
+                            }}
+                          >
+                            View Status Details
+                          </button>
+                        )}
+
                         {order.driverName && (
                           <button
                             className="btn-secondary text-sm py-1 w-full"
@@ -510,6 +556,13 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
         title="Order Cancelled"
         message={successMessage}
         onClose={() => setShowSuccessModal(false)}
+      />
+
+      <OrderStatusModal
+        isOpen={showStatusModal}
+        orderId={selectedOrderForStatus?.id || ''}
+        orderDetails={selectedOrderForStatus}
+        onClose={handleCloseStatusModal}
       />
     </div>
   );
