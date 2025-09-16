@@ -257,6 +257,44 @@ def handle_create_order(soap_body):
             f"[CMS] DEBUG: Extracted data - ClientId: '{client_id}', RecipientName: '{recipient_name}'"
         )
 
+        # ADD: Parse items from package details
+        items_data = []
+        if package_details and "#" in package_details:
+            # Parse format: "#1: Wireless Mouse (ID: ITEM001, Qty: 2, Weight: 0.2kg); #2: Keyboard ..."
+            import re
+            item_parts = package_details.split(";")
+            for part in item_parts:
+                part = part.strip()
+                if part.startswith("#"):
+                    try:
+                        # Use regex to extract item data
+                        match = re.search(
+                            r'#\d+:\s*([^(]+)\s*\(ID:\s*([^,]+),\s*Qty:\s*(\d+),\s*Weight:\s*([\d.]+)kg\)', part)
+                        if match:
+                            items_data.append({
+                                "itemId": match.group(2).strip(),
+                                "description": match.group(1).strip(),
+                                "quantity": int(match.group(3)),
+                                "weightKg": float(match.group(4))
+                            })
+                            print(
+                                f"[CMS] Parsed item: {match.group(1).strip()} (ID: {match.group(2).strip()})")
+                    except Exception as e:
+                        print(
+                            f"[CMS] Could not parse item from: {part}, error: {e}")
+
+        # If no items parsed from package details, create default items
+        if not items_data:
+            print("[CMS] No items parsed from package details, using defaults")
+            items_data = [
+                {"itemId": "ITEM001", "description": "Wireless Mouse",
+                    "quantity": 2, "weightKg": 0.2},
+                {"itemId": "ITEM002", "description": "Keyboard",
+                    "quantity": 1, "weightKg": 0.8}
+            ]
+
+        print(f"[CMS] Storing {len(items_data)} items for order")
+
         # Validate client
         if client_id not in clients:
             print(
@@ -278,6 +316,7 @@ def handle_create_order(soap_body):
             "recipient_address": recipient_address,
             "recipient_phone": recipient_phone,
             "package_details": package_details,
+            "items": items_data,
             "status": "PENDING",
             "created_at": datetime.now().isoformat(),
             "billing_amount": clients[client_id]["billing_rate"],
@@ -300,7 +339,7 @@ def handle_create_order(soap_body):
         )
 
         print(
-            f"[CMS] Order created: {internal_order_id} (external: {external_order_id}) for client {client_id}")
+            f"[CMS] Order created: {internal_order_id} (external: {external_order_id}) for client {client_id} with {len(items_data)} items")
         return response
 
     except Exception as e:
@@ -466,7 +505,7 @@ def handle_get_package_order_info(soap_body):
 
 
 def handle_get_orders_by_client(soap_body):
-    """Handle get orders by client request"""
+    """Handle get orders by client request - Enhanced to return items data"""
     try:
         # Try to find ClientId with or without namespace
         client_id_elem = soap_body.find("cms:ClientId", NAMESPACES)
@@ -487,7 +526,6 @@ def handle_get_orders_by_client(soap_body):
                 f"[CMS] Checking order {order_id}: client_id = {order_data.get('client_id')}")
             if order_data.get("client_id") == client_id:
                 client_orders.append({
-                    # Use external order ID
                     "orderId": order_data.get("external_order_id", order_id),
                     "internalOrderId": order_id,
                     "status": order_data.get("status", "PENDING"),
@@ -496,15 +534,28 @@ def handle_get_orders_by_client(soap_body):
                     "recipientAddress": order_data.get("recipient_address", ""),
                     "recipientPhone": order_data.get("recipient_phone", ""),
                     "billingAmount": order_data.get("billing_amount", 0.0),
-                    "packageDetails": order_data.get("package_details", "")
+                    "packageDetails": order_data.get("package_details", ""),
+                    "items": order_data.get("items", [])  # ADD THIS LINE
                 })
 
         print(
             f"[CMS] Found {len(client_orders)} orders for client {client_id}")
 
-        # Build SOAP response with orders
+        # Build SOAP response with orders INCLUDING ITEMS
         orders_xml = ""
         for order in client_orders:
+            # Build items XML
+            items_xml = ""
+            items_data = order.get("items", [])
+            for item in items_data:
+                items_xml += f"""
+                    <cms:Item>
+                        <cms:ItemId>{item.get('itemId', '')}</cms:ItemId>
+                        <cms:Description>{item.get('description', '')}</cms:Description>
+                        <cms:Quantity>{item.get('quantity', 0)}</cms:Quantity>
+                        <cms:WeightKg>{item.get('weightKg', 0.0)}</cms:WeightKg>
+                    </cms:Item>"""
+
             orders_xml += f"""
             <cms:Order>
                 <cms:OrderId>{order['orderId']}</cms:OrderId>
@@ -516,6 +567,8 @@ def handle_get_orders_by_client(soap_body):
                 <cms:RecipientPhone>{order['recipientPhone']}</cms:RecipientPhone>
                 <cms:BillingAmount>{order['billingAmount']}</cms:BillingAmount>
                 <cms:PackageDetails>{order['packageDetails']}</cms:PackageDetails>
+                <cms:Items>{items_xml}
+                </cms:Items>
             </cms:Order>"""
 
         response_body = f"""
@@ -535,6 +588,11 @@ def handle_get_orders_by_client(soap_body):
 
         print(
             f"[CMS] Returning {len(client_orders)} orders for client: {client_id}")
+        # Log items count for each order
+        for order in client_orders:
+            print(
+                f"[CMS] Order {order['orderId']} has {len(order.get('items', []))} items")
+
         return response
 
     except Exception as e:
