@@ -5,6 +5,11 @@ import org.springframework.web.client.RestTemplate;
 
 import com.swiftlogistics.esb.model.DeliveryOrder;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpEntity;
@@ -426,6 +431,7 @@ public class CmsService {
             headers.set("charset", "utf-8");
 
             HttpEntity<String> request = new HttpEntity<>(testRequest, headers);
+            logger.info("isHealthy request: {}", request);
 
             // Set a short timeout for health check
             restTemplate.getForObject(CMS_SOAP_URL, String.class);
@@ -617,5 +623,108 @@ public class CmsService {
         }
         return "Order cancellation confirmed";
 
+    }
+
+    // Get all orders for a specific client
+    public List<Map<String, Object>> getOrdersByClient(String clientId) {
+        try {
+            logger.info("Getting all orders for client: {}", clientId);
+
+            String soapRequest = createGetOrdersByClientSoapRequest(clientId);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.TEXT_XML);
+            headers.set("SOAPAction", "GetOrdersByClient");
+
+            HttpEntity<String> request = new HttpEntity<>(soapRequest, headers);
+
+            try {
+                String response = restTemplate.postForObject(CMS_SOAP_URL, request, String.class);
+                logger.debug("SOAP Response: {}", response);
+
+                List<Map<String, Object>> orders = parseOrdersFromSoapResponse(response);
+
+                if (orders != null && !orders.isEmpty()) {
+                    logger.info("Successfully retrieved {} real orders from CMS for client: {}", orders.size(),
+                            clientId);
+                    return orders;
+                } else {
+                    logger.warn("No orders found in CMS response for client: {}", clientId);
+                    return new ArrayList<>();
+                }
+
+            } catch (Exception e) {
+                logger.warn("SOAP request failed, returning empty list: ", e);
+                return new ArrayList<>();
+            }
+
+        } catch (Exception e) {
+            logger.error("Error getting orders for client: ", e);
+            return new ArrayList<>();
+        }
+    }
+
+    private String createGetOrdersByClientSoapRequest(String clientId) {
+        return String.format(
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+                        "<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"\n" +
+                        "               xmlns:cms=\"http://swiftlogistics.lk/cms\">\n" +
+                        "    <soap:Header/>\n" +
+                        "    <soap:Body>\n" +
+                        "        <cms:GetOrdersByClient>\n" +
+                        "            <cms:ClientId>%s</cms:ClientId>\n" +
+                        "        </cms:GetOrdersByClient>\n" +
+                        "    </soap:Body>\n" +
+                        "</soap:Envelope>",
+                clientId);
+    }
+
+    private List<Map<String, Object>> parseOrdersFromSoapResponse(String soapResponse) {
+        List<Map<String, Object>> orders = new ArrayList<>();
+
+        try {
+            if (soapResponse != null && soapResponse.contains("<cms:Order>")) {
+                logger.info("Parsing SOAP response with real order data");
+
+                // Split by order blocks
+                String[] orderBlocks = soapResponse.split("<cms:Order>");
+
+                for (int i = 1; i < orderBlocks.length; i++) {
+                    String orderBlock = "<cms:Order>" + orderBlocks[i].split("</cms:Order>")[0] + "</cms:Order>";
+                    Map<String, Object> order = new HashMap<>();
+
+                    // Extract order data using helper method
+                    order.put("orderId", extractXmlValue(orderBlock, "cms:OrderId"));
+                    order.put("internalOrderId", extractXmlValue(orderBlock, "cms:InternalOrderId"));
+                    order.put("status", extractXmlValue(orderBlock, "cms:Status"));
+                    order.put("createdAt", extractXmlValue(orderBlock, "cms:CreatedAt"));
+                    order.put("recipient", extractXmlValue(orderBlock, "cms:RecipientName"));
+                    order.put("address", extractXmlValue(orderBlock, "cms:RecipientAddress"));
+                    order.put("phone", extractXmlValue(orderBlock, "cms:RecipientPhone"));
+
+                    // Parse billing amount as double
+                    String billingStr = extractXmlValue(orderBlock, "cms:BillingAmount");
+                    try {
+                        order.put("billingAmount", Double.parseDouble(billingStr));
+                    } catch (NumberFormatException e) {
+                        order.put("billingAmount", 0.0);
+                    }
+
+                    order.put("packageDetails", extractXmlValue(orderBlock, "cms:PackageDetails"));
+
+                    // Calculate derived fields
+                    order.put("totalWeight", 1.2); // Default weight - could be extracted from package details
+                    order.put("totalItems", 3); // Default items - could be parsed from package details
+
+                    orders.add(order);
+                    logger.info("Parsed order: {} with status: {}", order.get("orderId"), order.get("status"));
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Error parsing SOAP orders response: ", e);
+        }
+
+        logger.info("Parsed {} orders from SOAP response", orders.size());
+        return orders;
     }
 }

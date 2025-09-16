@@ -12,6 +12,10 @@ camel:
 spring:
   application:
     name: esb-service
+  logging:
+    level:
+      com.netflix.discovery: DEBUG
+      org.springframework.cloud.netflix.eureka: DEBUG
   rabbitmq:
     host: localhost
     port: 5672

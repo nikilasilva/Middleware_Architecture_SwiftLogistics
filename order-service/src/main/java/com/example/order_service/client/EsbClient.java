@@ -2,6 +2,7 @@ package com.example.order_service.client;
 
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,8 +17,7 @@ public interface EsbClient {
 
     // Call your existing ESB endpoints
     @GetMapping("/esb/processOrder")
-    String processOrderSimple(@RequestParam("clientId") String clientId,
-                              @RequestParam("address") String address);
+    String processOrderSimple(@RequestParam("clientId") String clientId, @RequestParam("address") String address);
 
     // @PostMapping("/orders")
     // ResponseEntity<Map<String, Object>> processOrder(@RequestBody Map<String,
@@ -41,7 +41,7 @@ public interface EsbClient {
     @GetMapping("/health")
     ResponseEntity<Map<String, Object>> checkHealth();
 
-    //method 6
+    // method 6
     // Add this method to your EsbClient interface
     @PostMapping("/routes/optimize")
     ResponseEntity<Map<String, Object>> optimizeRoute(@RequestBody Map<String, Object> routeRequest);
@@ -50,5 +50,13 @@ public interface EsbClient {
     // NEW: Package tracking through ESB
     @GetMapping("/packages/{packageId}/track")
     ResponseEntity<Map<String, Object>> trackPackage(@PathVariable("packageId") String packageId);
+
+    // Cancel order endpoint
+    @DeleteMapping("/orders/cancel")
+    ResponseEntity<Map<String, Object>> cancelOrder(@RequestParam("orderId") String orderId);
+
+    // Get all orders for a specific client
+    @GetMapping("/clients/{clientId}/orders")
+    ResponseEntity<Map<String, Object>> getOrdersByClient(@PathVariable("clientId") String clientId);
 
 }

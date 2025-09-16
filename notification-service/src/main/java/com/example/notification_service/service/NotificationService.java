@@ -23,8 +23,11 @@ public class NotificationService {
 
         if ("ORDER_CREATED".equals(eventType)) {
             sendOrderConfirmationNotification(orderId, clientId, deliveryAddress, orderEvent);
+        } else if ("ORDER_CANCELLED".equals(eventType)) {
+            sendOrderCancellationNotification(orderId, orderEvent);
         }
     }
+
     // NEW: Handle order status update events
     @RabbitListener(queues = "order.status.queue")
     public void handleOrderStatusUpdate(Map<String, Object> statusEvent) {
@@ -83,5 +86,38 @@ public class NotificationService {
         // You could store these events in a database for tracking
         // You could send different notifications based on event type
         // You could trigger other workflows
+    }
+
+    private void sendOrderCancellationNotification(String orderId, Map<String, Object> cancellationDetails) {
+        logger.info("📧 Sending order cancellation notification for order {}", orderId);
+
+        try {
+            Thread.sleep(1500); // Simulate notification processing time
+
+            // Extract cancellation details
+            Object cancellationResultObj = cancellationDetails.get("cancellationResult");
+            Map<String, Object> cancellationResult = null;
+            if (cancellationResultObj instanceof Map<?, ?>) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> temp = (Map<String, Object>) cancellationResultObj;
+                cancellationResult = temp;
+            }
+
+            logger.info("✅ CANCELLATION EMAIL SENT: Order {} has been cancelled successfully", orderId);
+            logger.info(
+                    "📱 CANCELLATION SMS SENT: Your order {} has been cancelled. Refund will be processed within 3-5 business days",
+                    orderId);
+            logger.info("🔔 CANCELLATION PUSH NOTIFICATION: Order {} cancellation confirmed", orderId);
+
+            // Log system-specific cancellation results
+            if (cancellationResult != null) {
+                logger.info("📋 CMS Cancellation: {}", cancellationResult.get("cmsResult"));
+                logger.info("🛣️ ROS Cancellation: {}", cancellationResult.get("rosResult"));
+                logger.info("📦 WMS Cancellation: {}", cancellationResult.get("wmsResult"));
+            }
+
+        } catch (InterruptedException e) {
+            logger.error("❌ Failed to send cancellation notification for order: {}", orderId, e);
+        }
     }
 }

@@ -11,8 +11,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
 
 @RestController
 public class EsbController {
@@ -189,48 +191,99 @@ public class EsbController {
     // Add Map support for Order Service
     @PostMapping("/orders/map")
     public ResponseEntity<Map<String, Object>> createOrderFromMap(@RequestBody Map<String, Object> orderData) {
-        logger.info("ESB received order data from microservice: {}", orderData);
+        logger.info("ESB received detailed order data: {}", orderData);
 
         try {
-            // Extract data from the map sent by Order Service
+            // Extract data including items
             String orderId = (String) orderData.get("orderId");
             String clientId = (String) orderData.get("clientId");
             String deliveryAddress = (String) orderData.get("deliveryAddress");
             String pickupAddress = (String) orderData.get("pickupAddress");
+            String recipientName = (String) orderData.get("recipientName");
+            String recipientPhone = (String) orderData.get("recipientPhone");
+            String notes = (String) orderData.get("notes");
+            Double totalWeight = (Double) orderData.get("totalWeight");
+            Integer totalItems = (Integer) orderData.get("totalItems");
+            List<?> items = (List<?>) orderData.get("items");
 
-            logger.info("Processing order - ID: {}, Client: {}, Delivery: {}", orderId, clientId, deliveryAddress);
+            logger.info("Processing order {} with {} items ({}kg total) for recipient: {}",
+                    orderId, totalItems, totalWeight, recipientName);
 
-            // Use your existing service calls
             Map<String, Object> response = new HashMap<>();
+            Map<String, Boolean> registrationResults = new HashMap<>();
 
-            // Call CMS
-            String clientValidation = cmsService.fetchClientData(clientId);
-            logger.info("Client validation result: {}", clientValidation);
-
-            // Call ROS
-            String rosResponse = rosService.optimizeRoute(deliveryAddress);
-            logger.info("ROS response: {}", rosResponse);
-
-            // Call WMS
-            String wmsResponse = wmsService.checkWarehouseStatus();
-            logger.info("WMS response: {}", wmsResponse);
-
-            response.put("success", true);
-            response.put("orderId", orderId);
-            response.put("clientValidation", clientValidation);
-            response.put("routeId", rosResponse);
-            response.put("wmsStatus", wmsResponse);
-            response.put("processedBy", "ESB");
-            response.put("timestamp", System.currentTimeMillis());
-
-            // 🚀 PUBLISH ORDER EVENT TO RABBITMQ
+            // Create detailed order object
             DeliveryOrder order = new DeliveryOrder();
             order.setOrderId(orderId);
             order.setClientId(clientId);
             order.setDeliveryAddress(deliveryAddress);
             order.setPickupAddress(pickupAddress);
+            order.setRecipientName(recipientName);
+            order.setRecipientPhone(recipientPhone);
+            order.setNotes(notes);
+            order.setTotalWeight(totalWeight != null ? totalWeight : 0.0);
+            order.setTotalItems(totalItems != null ? totalItems : 0);
 
-            publishOrderCreatedEvent(order, response);
+            // 1. Validate client and create order in CMS
+            String clientValidation = cmsService.fetchClientData(clientId);
+            logger.info("Client validation result: {}", clientValidation);
+
+            if (!clientValidation.contains("Invalid") && !clientValidation.contains("Error")) {
+                try {
+                    String cmsOrderResult = cmsService.createOrder(order);
+                    logger.info("CMS order creation result: {}", cmsOrderResult);
+                    registrationResults.put("CMS", true);
+                } catch (Exception e) {
+                    logger.warn("Failed to create order in CMS: {}", e.getMessage());
+                    registrationResults.put("CMS", false);
+                }
+            } else {
+                registrationResults.put("CMS", false);
+            }
+
+            // 2. Create optimized route with ROS (considering weight for vehicle selection)
+            try {
+                String routeResult = rosService.createOptimizedRoute(deliveryAddress, orderId, totalWeight);
+                logger.info("ROS route creation result: {}", routeResult);
+                response.put("routeId", routeResult);
+                registrationResults.put("ROS", true);
+            } catch (Exception e) {
+                logger.warn("Failed to create route in ROS: {}", e.getMessage());
+                response.put("routeId", "Route creation failed: " + e.getMessage());
+                registrationResults.put("ROS", false);
+            }
+
+            // 3. Register package with WMS (with detailed item information)
+            try {
+                String wmsResult = wmsService.registerPackage(order);
+                logger.info("WMS package registration result: {}", wmsResult);
+                response.put("wmsStatus", wmsResult);
+                registrationResults.put("WMS", true);
+            } catch (Exception e) {
+                logger.warn("Failed to register package in WMS: {}", e.getMessage());
+                response.put("wmsStatus", "Package registration failed: " + e.getMessage());
+                registrationResults.put("WMS", false);
+            }
+
+            // Determine overall success
+            long successfulRegistrations = registrationResults.values().stream().mapToLong(b -> b ? 1 : 0).sum();
+            boolean overallSuccess = successfulRegistrations >= 2;
+
+            response.put("success", overallSuccess);
+            response.put("orderId", orderId);
+            response.put("clientValidation", clientValidation);
+            response.put("registrationResults", registrationResults);
+            response.put("itemsSummary", totalItems + " items, " + totalWeight + "kg total");
+            response.put("item list", items);
+            response.put("recipient", recipientName);
+            response.put("processedBy", "ESB");
+            response.put("timestamp", System.currentTimeMillis());
+
+            if (overallSuccess) {
+                publishOrderCreatedEvent(order, response);
+                logger.info("Order {} successfully created with {} items ({}kg) for {}",
+                        orderId, totalItems, totalWeight, recipientName);
+            }
 
             return ResponseEntity.ok(response);
 
@@ -240,7 +293,6 @@ public class EsbController {
             errorResponse.put("success", false);
             errorResponse.put("error", e.getMessage());
             errorResponse.put("processedBy", "ESB");
-
             return ResponseEntity.internalServerError().body(errorResponse);
         }
     }
@@ -281,8 +333,7 @@ public class EsbController {
 
     // // 6. Route optimization endpoint
     @PostMapping("/routes/optimize")
-    public ResponseEntity<Map<String, Object>> optimizeRoute(@RequestBody
-                                                             Map<String, Object> routeRequest) {
+    public ResponseEntity<Map<String, Object>> optimizeRoute(@RequestBody Map<String, Object> routeRequest) {
         logger.info("Optimizing route: {}", routeRequest);
 
         try {
@@ -395,6 +446,7 @@ public class EsbController {
     // 10. Emergency order cancellation with smart ID mapping
     @DeleteMapping("/orders/cancel")
     public ResponseEntity<Map<String, Object>> cancelOrder(@RequestParam("orderId") String orderId) {
+        logger.info("ESB received cancellation request for order: {}", orderId);
 
         try {
             Map<String, Object> response = new HashMap<>();
@@ -409,6 +461,10 @@ public class EsbController {
             response.put("cmsResult", cmsResult);
             response.put("rosResult", rosResult);
             response.put("wmsResult", wmsResult);
+
+            // 🚀 PUBLISH ORDER CANCELLATION EVENT TO RABBITMQ
+            publishOrderCancellationEvent(orderId, response);
+            logger.info("Order {} cancelled successfully across all systems", orderId);
 
             return ResponseEntity.ok(response);
 
@@ -455,6 +511,129 @@ public class EsbController {
         } catch (Exception e) {
             logger.error("Failed to publish order created event: ", e);
             // Don't fail the order creation if messaging fails
+        }
+    }
+
+    private void publishOrderCancellationEvent(String orderId, Map<String, Object> cancellationResult) {
+        try {
+            Map<String, Object> event = new HashMap<>();
+            event.put("eventType", "ORDER_CANCELLED");
+            event.put("orderId", orderId);
+            event.put("cancellationResult", cancellationResult);
+            event.put("timestamp", System.currentTimeMillis());
+            event.put("source", "ESB");
+
+            // Publish to different queues for different services
+
+            // 1. Notification Service Queue - Send cancellation confirmation
+            rabbitTemplate.convertAndSend("order.notifications.exchange", "order.cancelled", event);
+            logger.info("📧 Published ORDER_CANCELLED event to notification service for order: {}", orderId);
+
+            // 2. Route Service Queue - Stop route optimization
+            rabbitTemplate.convertAndSend("order.routing.exchange", "route.cancelled", event);
+            logger.info("🛣️ Published ROUTE_CANCELLED event to route service for order: {}", orderId);
+
+            // 3. Warehouse Service Queue - Release package resources
+            rabbitTemplate.convertAndSend("order.warehouse.exchange", "package.cancelled", event);
+            logger.info("📦 Published PACKAGE_CANCELLED event to warehouse service for order: {}", orderId);
+
+            // 4. General Order Events Queue - Track cancellation
+            rabbitTemplate.convertAndSend("order.events.exchange", "order.lifecycle", event);
+            logger.info("📋 Published ORDER_CANCELLATION_LIFECYCLE event for order: {}", orderId);
+
+        } catch (Exception e) {
+            logger.error("Failed to publish order cancellation event: ", e);
+            // Don't fail the cancellation if messaging fails
+        }
+    }
+
+    // Get all orders for a specific client
+    @GetMapping("/clients/{clientId}/orders")
+    public ResponseEntity<Map<String, Object>> getOrdersByClient(@PathVariable("clientId") String clientId) {
+        logger.info("ESB received request to get all orders for client: {}", clientId);
+
+        try {
+            Map<String, Object> response = new HashMap<>();
+
+            // Get orders from CMS (primary source)
+            List<Map<String, Object>> cmsOrders = cmsService.getOrdersByClient(clientId);
+
+            // Enhance with data from ROS and WMS
+            List<Map<String, Object>> enrichedOrders = enrichOrdersWithSystemData(cmsOrders);
+
+            response.put("success", true);
+            response.put("clientId", clientId);
+            response.put("orders", enrichedOrders);
+            response.put("totalOrders", enrichedOrders.size());
+            response.put("dataSource", "CMS with ROS/WMS enrichment");
+            response.put("timestamp", System.currentTimeMillis());
+
+            logger.info("Successfully retrieved {} orders for client: {}", enrichedOrders.size(), clientId);
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            logger.error("Error getting orders for client {}: ", clientId, e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("clientId", clientId);
+            errorResponse.put("error", e.getMessage());
+            errorResponse.put("timestamp", System.currentTimeMillis());
+            return ResponseEntity.internalServerError().body(errorResponse);
+        }
+    }
+
+    // Helper method to enrich orders with ROS and WMS data
+    private List<Map<String, Object>> enrichOrdersWithSystemData(List<Map<String, Object>> orders) {
+        List<Map<String, Object>> enrichedOrders = new ArrayList<>();
+
+        for (Map<String, Object> order : orders) {
+            Map<String, Object> enrichedOrder = new HashMap<>(order);
+            String orderId = (String) order.get("orderId");
+
+            try {
+                // Get route information from ROS
+                String routeStatus = rosService.getRouteStatus(orderId);
+                enrichedOrder.put("routeStatus", routeStatus);
+
+                // Get package information from WMS
+                String packageStatus = wmsService.getPackageStatus(orderId);
+                enrichedOrder.put("packageStatus", packageStatus);
+
+                // Add comprehensive status
+                enrichedOrder.put("overallStatus", determineOverallStatus(
+                        (String) order.get("status"), routeStatus, packageStatus));
+
+            } catch (Exception e) {
+                logger.debug("Failed to enrich order {} with system data: {}", orderId, e.getMessage());
+                // Add default values if enrichment fails
+                enrichedOrder.put("routeStatus", "unknown");
+                enrichedOrder.put("packageStatus", "unknown");
+                enrichedOrder.put("overallStatus", order.get("status"));
+            }
+
+            enrichedOrders.add(enrichedOrder);
+        }
+
+        return enrichedOrders;
+    }
+
+    // Helper method to determine overall order status
+    private String determineOverallStatus(String cmsStatus, String routeStatus, String packageStatus) {
+        // Logic to combine statuses from different systems
+        if ("delivered".equalsIgnoreCase(packageStatus) || "completed".equalsIgnoreCase(routeStatus)) {
+            return "DELIVERED";
+        } else if ("in_progress".equalsIgnoreCase(routeStatus) || "LOADED".equalsIgnoreCase(packageStatus)) {
+            return "IN_TRANSIT";
+        } else if ("confirmed".equalsIgnoreCase(cmsStatus) && "READY_FOR_LOADING".equalsIgnoreCase(packageStatus)) {
+            return "READY_FOR_DISPATCH";
+        } else if ("processing".equalsIgnoreCase(cmsStatus) || "PROCESSING".equalsIgnoreCase(packageStatus)) {
+            return "PROCESSING";
+        } else if ("pending".equalsIgnoreCase(cmsStatus)) {
+            return "PENDING";
+        } else if ("CANCELLED".equalsIgnoreCase(cmsStatus) || "cancelled".equalsIgnoreCase(routeStatus)) {
+            return "CANCELLED";
+        } else {
+            return "UNKNOWN";
         }
     }
 
