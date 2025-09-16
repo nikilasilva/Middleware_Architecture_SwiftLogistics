@@ -4,8 +4,9 @@ import StatusStepper from "./StatusStepper";
 import EditOrder from "./EditOrder";
 import { useState, useEffect } from "react";
 import { OrderData } from "@/types";
-import { fetchOrdersByClient } from "@/lib/ordersApi";
+import { cancelOrder, fetchOrdersByClient } from "@/lib/ordersApi";
 import { ApiOrder } from "@/types/order";
+import ConfirmationModal from "./ConfirmationModal";
 
 interface Order extends OrderData {
   id: string;
@@ -42,6 +43,8 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [orderToCancel, setOrderToCancel] = useState<string>("");
 
   // Get clientId from cookie
   const clientId = getCookie('clientId');
@@ -198,13 +201,53 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
     setEditingOrder(null);
   };
 
-  const handleCancelOrder = (orderId: string) => {
+  const handleCancelOrder = async (orderId: string) => {
     console.log("Cancelling order ID:", orderId);
-    setOrders(prev =>
-      prev.map(order =>
-        order.id === orderId ? { ...order, status: "cancelled" } : order
-      )
-    );
+
+    // Show confirmation dialog    
+    setOrderToCancel(orderId);
+    setShowCancelModal(true);
+  };
+
+  // Handle confirmation from modal
+  const handleConfirmCancel = async () => {
+    setShowCancelModal(false);
+
+    if (!orderToCancel) return;
+
+    try {
+      console.log("Cancelling order ID:", orderToCancel);
+
+      // Use the API function
+      const result = await cancelOrder(orderToCancel);
+      console.log("Cancel order response:", result);
+
+      if (result.success) {
+        // Update local state to reflect cancellation
+        setOrders(prev =>
+          prev.map(order =>
+            order.id === orderToCancel ? { ...order, status: "cancelled" } : order
+          )
+        );
+
+        // Show success message (you can also create a success modal for this)
+        alert(result.message || "Order cancelled successfully!");
+      } else {
+        throw new Error(result.error || "Failed to cancel order");
+      }
+
+    } catch (error) {
+      console.error("Error cancelling order:", error);
+      alert(`Failed to cancel order: ${(error as Error).message}`);
+    } finally {
+      setOrderToCancel("");
+    }
+  };
+
+  // ADD: Handle cancel from modal
+  const handleCancelFromModal = () => {
+    setShowCancelModal(false);
+    setOrderToCancel("");
   };
 
   const filteredOrders = orders.filter((order) => {
@@ -446,6 +489,17 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
           onCancel={handleCancelEdit}
         />
       )}
+
+      <ConfirmationModal
+        isOpen={showCancelModal}
+        title="Cancel Order"
+        message={`Are you sure you want to cancel order ${orderToCancel}? This action cannot be undone and will notify all relevant parties.`}
+        confirmText="Yes, Cancel Order"
+        cancelText="Keep Order"
+        confirmButtonColor="bg-red-600 hover:bg-red-700 focus:ring-red-500"
+        onConfirm={handleConfirmCancel}
+        onCancel={handleCancelFromModal}
+      />
     </div>
   );
 }
