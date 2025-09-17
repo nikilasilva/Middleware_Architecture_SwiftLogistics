@@ -7,7 +7,7 @@ const mockDriver = {
     email: "driver@swiftlogistics.lk",
     password: "driver123",
     name: "Nimal Perera",
-    driverId: "DRIVER001",
+    driverId: "DRIVER002",
 };
 
 export default function DriverLogin() {
