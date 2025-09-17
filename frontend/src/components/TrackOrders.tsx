@@ -493,7 +493,7 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
                             className="text-sm py-1 w-full border border-red-500 text-red-500 rounded hover:bg-red-50 transition-colors"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleCancelOrder(order.id);
+                              handleCancelOrder(order.trackingNumber);
                             }}
                           >
                             Cancel Order
