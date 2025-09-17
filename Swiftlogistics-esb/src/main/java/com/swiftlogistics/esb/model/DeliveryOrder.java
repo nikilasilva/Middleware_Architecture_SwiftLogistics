@@ -15,6 +15,7 @@ public class DeliveryOrder {
     private int totalItems;
     private Map<String, Object> metadata;
 
+
     // Default constructor
     public DeliveryOrder() {
     }
@@ -128,6 +129,12 @@ public class DeliveryOrder {
 
         // Default constructor
         public OrderItem() {
+        }
+        public OrderItem(String itemId, String description, int quantity, double weightKg) {
+            this.itemId = itemId;
+            this.description = description;
+            this.quantity = quantity;
+            this.weightKg = weightKg;
         }
 
         // Getters and setters
