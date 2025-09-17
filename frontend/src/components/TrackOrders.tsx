@@ -198,13 +198,24 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
     setEditingOrder(null);
   };
 
-  const handleCancelOrder = (orderId: string) => {
-    console.log("Cancelling order ID:", orderId);
-    setOrders(prev =>
-      prev.map(order =>
-        order.id === orderId ? { ...order, status: "cancelled" } : order
-      )
-    );
+  const handleCancelOrder = async (trackingNumber: string) => {
+    try {
+      const response = await fetch(`http://localhost:8089/api/orders/${trackingNumber}/cancel`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        throw new Error("Failed to cancel order");
+      }
+      setOrders(prev =>
+        prev.map(order =>
+          order.trackingNumber === trackingNumber ? { ...order, status: "cancelled" } : order
+        )
+      );
+      console.log("Order cancelled:", trackingNumber);
+    } catch (error) {
+      console.error("Error cancelling order:", error);
+      // Optionally show error to user
+    }
   };
 
   const filteredOrders = orders.filter((order) => {
@@ -396,7 +407,7 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
                             className="text-sm py-1 w-full border border-red-500 text-red-500 rounded hover:bg-red-50 transition-colors"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleCancelOrder(order.id);
+                              handleCancelOrder(order.trackingNumber);
                             }}
                           >
                             Cancel Order
