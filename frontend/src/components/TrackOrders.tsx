@@ -4,8 +4,12 @@ import StatusStepper from "./StatusStepper";
 import EditOrder from "./EditOrder";
 import { useState, useEffect } from "react";
 import { OrderData } from "@/types";
-import { fetchOrdersByClient } from "@/lib/ordersApi";
+import { cancelOrder, fetchOrdersByClient } from "@/lib/ordersApi";
 import { ApiOrder } from "@/types/order";
+import ConfirmationModal from "./ConfirmationModal";
+import SuccessModal from "./SuccessModal";
+import OrderStatusModal from "./OrderStatusModal";
+import CancelledOrderModal from "./CancelledOrderModalProps";
 
 interface Order extends OrderData {
   id: string;
@@ -42,6 +46,14 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [orderToCancel, setOrderToCancel] = useState<string>("");
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [selectedOrderForStatus, setSelectedOrderForStatus] = useState<Order | null>(null);
+  const [showCancelledModal, setShowCancelledModal] = useState(false);
+  const [cancelledOrderNumber, setCancelledOrderNumber] = useState("");
 
   // Get clientId from cookie
   const clientId = getCookie('clientId');
@@ -168,9 +180,25 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
   // };
 
   const handleEditOrder = (order: Order) => {
+    // Only allow editing for pending orders
     if (order.status === "pending") {
       setEditingOrder(order);
+    } else if (order.status === "cancelled") {
+      // For cancelled orders
+      setCancelledOrderNumber(order.trackingNumber);
+      setShowCancelledModal(true);
+      return;
+    } else {
+      // For non-pending, non-cancelled orders, show status details
+      setSelectedOrderForStatus(order);
+      setShowStatusModal(true);
     }
+  };
+
+  // Handler for status modal close
+  const handleCloseStatusModal = () => {
+    setShowStatusModal(false);
+    setSelectedOrderForStatus(null);
   };
 
   const handleSaveOrder = (updatedOrder: Order) => {
@@ -198,13 +226,54 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
     setEditingOrder(null);
   };
 
-  const handleCancelOrder = (orderId: string) => {
+  const handleCancelOrder = async (orderId: string) => {
     console.log("Cancelling order ID:", orderId);
-    setOrders(prev =>
-      prev.map(order =>
-        order.id === orderId ? { ...order, status: "cancelled" } : order
-      )
-    );
+
+    // Show confirmation dialog    
+    setOrderToCancel(orderId);
+    setShowCancelModal(true);
+  };
+
+  // Handle confirmation from modal
+  const handleConfirmCancel = async () => {
+    setShowCancelModal(false);
+
+    if (!orderToCancel) return;
+
+    try {
+      console.log("Cancelling order ID:", orderToCancel);
+
+      // Use the API function
+      const result = await cancelOrder(orderToCancel);
+      console.log("Cancel order response:", result);
+
+      if (result.success) {
+        // Update local state to reflect cancellation
+        setOrders(prev =>
+          prev.map(order =>
+            order.id === orderToCancel ? { ...order, status: "cancelled" } : order
+          )
+        );
+
+        // Show success message
+        setSuccessMessage(result.message || "Order cancelled successfully!");
+        setShowSuccessModal(true);
+      } else {
+        throw new Error(result.error || "Failed to cancel order");
+      }
+
+    } catch (error) {
+      console.error("Error cancelling order:", error);
+      alert(`Failed to cancel order: ${(error as Error).message}`);
+    } finally {
+      setOrderToCancel("");
+    }
+  };
+
+  // ADD: Handle cancel from modal
+  const handleCancelFromModal = () => {
+    setShowCancelModal(false);
+    setOrderToCancel("");
   };
 
   const filteredOrders = orders.filter((order) => {
@@ -303,22 +372,35 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
               filteredOrders.map((order) => (
                 <div
                   key={order.id}
-                  className={`card p-6 cursor-pointer transition-all ${order.status === "pending" ? "hover:shadow-md" : ""}`}
+                  className={`card p-6 cursor-pointer transition-all hover:shadow-md ${order.status === "pending"
+                    ? "hover:border-blue-300"
+                    : "hover:border-green-300"
+                    }`}
                   onClick={() => handleEditOrder(order)}
                 >
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Column 1: Order Info - JSON details */}
                     <div>
+
                       <div className="flex items-center justify-between mb-2">
                         <h3 className="text-lg font-semibold">
                           Tracking: {order.trackingNumber}
                         </h3>
-                        {order.status === "pending" && (
+                        {order.status === "pending" ? (
                           <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
                             Click to edit
                           </span>
+                        ) : order.status === "cancelled" ? (
+                          <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
+                            Order cancelled
+                          </span>
+                        ) : (
+                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                            Click for status details
+                          </span>
                         )}
                       </div>
+
                       <div className="mb-1 text-gray-600">
                         <strong>Client ID:</strong> {order.clientId}
                       </div>
@@ -379,6 +461,21 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
                         </div>
                       </div>
                       <div className="flex flex-col gap-2">
+
+                        {/* Status Details Button */}
+                        {order.status !== "cancelled" && (
+                          <button
+                            className="btn-secondary text-sm py-1 w-full"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedOrderForStatus(order);
+                              setShowStatusModal(true);
+                            }}
+                          >
+                            View Status Details
+                          </button>
+                        )}
+
                         {order.driverName && (
                           <button
                             className="btn-secondary text-sm py-1 w-full"
@@ -446,6 +543,38 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
           onCancel={handleCancelEdit}
         />
       )}
+
+      {/* Cancelled Order Modal */}
+      <CancelledOrderModal
+        isOpen={showCancelledModal}
+        orderNumber={cancelledOrderNumber}
+        onClose={() => setShowCancelledModal(false)}
+      />
+
+      <ConfirmationModal
+        isOpen={showCancelModal}
+        title="Cancel Order"
+        message={`Are you sure you want to cancel order ${orderToCancel}? This action cannot be undone and will notify all relevant parties.`}
+        confirmText="Yes, Cancel Order"
+        cancelText="Keep Order"
+        confirmButtonColor="bg-red-600 hover:bg-red-700 focus:ring-red-500"
+        onConfirm={handleConfirmCancel}
+        onCancel={handleCancelFromModal}
+      />
+
+      <SuccessModal
+        isOpen={showSuccessModal}
+        title="Order Cancelled"
+        message={successMessage}
+        onClose={() => setShowSuccessModal(false)}
+      />
+
+      <OrderStatusModal
+        isOpen={showStatusModal}
+        orderId={selectedOrderForStatus?.id || ''}
+        orderDetails={selectedOrderForStatus}
+        onClose={handleCloseStatusModal}
+      />
     </div>
   );
 }
