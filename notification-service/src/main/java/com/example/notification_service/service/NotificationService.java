@@ -3,6 +3,7 @@ package com.example.notification_service.service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
@@ -11,6 +12,9 @@ import java.util.Map;
 public class NotificationService {
 
     private static final Logger logger = LoggerFactory.getLogger(NotificationService.class);
+
+    @Autowired
+    private DriverOrderService driverOrderService;
 
     @RabbitListener(queues = "order.notifications.queue")
     public void handleOrderCreated(Map<String, Object> orderEvent) {
@@ -22,13 +26,19 @@ public class NotificationService {
         String deliveryAddress = (String) orderEvent.get("deliveryAddress");
 
         if ("ORDER_CREATED".equals(eventType)) {
+            // Send notification to customer
             sendOrderConfirmationNotification(orderId, clientId, deliveryAddress, orderEvent);
+
+            // Process order for driver assignment
+            logger.info("🚚 Processing order {} for driver assignment", orderId);
+            driverOrderService.processNewOrder(orderEvent);
+
         } else if ("ORDER_CANCELLED".equals(eventType)) {
             sendOrderCancellationNotification(orderId, orderEvent);
         }
     }
 
-    // NEW: Handle order status update events
+    // Handle order status update events
     @RabbitListener(queues = "order.status.queue")
     public void handleOrderStatusUpdate(Map<String, Object> statusEvent) {
         logger.info("📊 Received order status update event: {}", statusEvent);
@@ -37,14 +47,33 @@ public class NotificationService {
         String newStatus = (String) statusEvent.get("newStatus");
         String system = (String) statusEvent.get("system");
 
+        // Send notification to customer
         sendOrderStatusUpdateNotification(orderId, newStatus, system, statusEvent);
+
+        // NEW: Update driver order status
+        logger.info("🚚 Updating driver order status for order {}", orderId);
+        driverOrderService.updateOrderFromQueue(statusEvent);
+    }
+
+    @RabbitListener(queues = "order.events.queue")
+    public void handleOrderLifecycleEvents(Map<String, Object> orderEvent) {
+        logger.info("📋 Received order lifecycle event: {}", orderEvent);
+
+        String orderId = (String) orderEvent.get("orderId");
+        String eventType = (String) orderEvent.get("eventType");
+
+        logger.info("📊 Processing lifecycle event {} for order {}", eventType, orderId);
+
+        // Process lifecycle events for driver service
+        if ("ORDER_CREATED".equals(eventType)) {
+            driverOrderService.processNewOrder(orderEvent);
+        }
     }
 
     private void sendOrderConfirmationNotification(String orderId, String clientId, String deliveryAddress,
             Map<String, Object> orderDetails) {
         logger.info("📧 Sending order confirmation notification for order {} to client {}", orderId, clientId);
 
-        // Simulate sending email/SMS
         try {
             Thread.sleep(2000); // Simulate notification processing time
 
@@ -57,7 +86,6 @@ public class NotificationService {
         }
     }
 
-    // NEW: Handle status update notifications
     private void sendOrderStatusUpdateNotification(String orderId, String newStatus, String system,
             Map<String, Object> statusDetails) {
         logger.info("📨 Sending status update notification for order {} - new status: {}", orderId, newStatus);
@@ -74,27 +102,12 @@ public class NotificationService {
         }
     }
 
-    @RabbitListener(queues = "order.events.queue")
-    public void handleOrderLifecycleEvents(Map<String, Object> orderEvent) {
-        logger.info("📋 Received order lifecycle event: {}", orderEvent);
-
-        String orderId = (String) orderEvent.get("orderId");
-        String eventType = (String) orderEvent.get("eventType");
-
-        logger.info("📊 Processing lifecycle event {} for order {}", eventType, orderId);
-
-        // You could store these events in a database for tracking
-        // You could send different notifications based on event type
-        // You could trigger other workflows
-    }
-
     private void sendOrderCancellationNotification(String orderId, Map<String, Object> cancellationDetails) {
         logger.info("📧 Sending order cancellation notification for order {}", orderId);
 
         try {
             Thread.sleep(1500); // Simulate notification processing time
 
-            // Extract cancellation details
             Object cancellationResultObj = cancellationDetails.get("cancellationResult");
             Map<String, Object> cancellationResult = null;
             if (cancellationResultObj instanceof Map<?, ?>) {
@@ -109,7 +122,6 @@ public class NotificationService {
                     orderId);
             logger.info("🔔 CANCELLATION PUSH NOTIFICATION: Order {} cancellation confirmed", orderId);
 
-            // Log system-specific cancellation results
             if (cancellationResult != null) {
                 logger.info("📋 CMS Cancellation: {}", cancellationResult.get("cmsResult"));
                 logger.info("🛣️ ROS Cancellation: {}", cancellationResult.get("rosResult"));
