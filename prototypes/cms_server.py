@@ -84,8 +84,13 @@ def soap_endpoint():
     """Main SOAP endpoint for CMS operations"""
 
     try:
+        # Print raw incoming SOAP XML
+        raw_xml = request.data.decode("utf-8")
+        print("[CMS] Incoming SOAP XML:")
+        print(raw_xml)
+
         # Parse SOAP request
-        soap_body = parse_soap_request(request.data.decode("utf-8"))
+        soap_body = parse_soap_request(raw_xml)
 
         if soap_body is None:
             return create_soap_fault("Invalid SOAP request"), 500
@@ -173,7 +178,7 @@ def handle_cancel_order(soap_body):
 def handle_create_order(soap_body):
     """Handle order creation"""
     try:
-        print(f"[CMS] DEBUG: Received soap_body tag: {soap_body.tag}")
+        print(f"[CMS] DEBUG: Received soap_body: {soap_body}")
         print(
             f"[CMS] DEBUG: soap_body children: {[child.tag for child in soap_body]}")
 
@@ -195,48 +200,70 @@ def handle_create_order(soap_body):
             elem = parent.find(f".//{element_name}")
             return elem
 
-        client_id_elem = find_element_with_namespace(soap_body, "ClientId")
-        recipient_name_elem = find_element_with_namespace(
-            soap_body, "RecipientName")
-        recipient_address_elem = find_element_with_namespace(
-            soap_body, "RecipientAddress"
-        )
-        recipient_phone_elem = find_element_with_namespace(
-            soap_body, "RecipientPhone")
-        package_details_elem = find_element_with_namespace(
-            soap_body, "PackageDetails")
-        order_id_elem = find_element_with_namespace(
-            soap_body, "OrderId")  # Get external order ID
 
+        # Accept both legacy and new field names
+        def find_any(parent, element_name):
+            # Try with namespace first
+            elem = parent.find(f"cms:{element_name}", NAMESPACES)
+            if elem is not None:
+                return elem
+            # Try without namespace
+            elem = parent.find(element_name)
+            if elem is not None:
+                return elem
+            # Try with full namespace
+            elem = parent.find(f"{{{NAMESPACES['cms']}}}{element_name}")
+            if elem is not None:
+                return elem
+            # Try with xpath
+            elem = parent.find(f".//cms:{element_name}", NAMESPACES)
+            if elem is not None:
+                return elem
+            elem = parent.find(f".//{element_name}")
+            if elem is not None:
+                return elem
+            elem = parent.find(f".//{{{NAMESPACES['cms']}}}{element_name}")
+            return elem
+
+        client_id_elem = find_any(soap_body, "ClientId")
+        recipient_name_elem = find_any(soap_body, "RecipientName")
+        recipient_address_elem = find_any(soap_body, "RecipientAddress")
+        delivery_address_elem = find_any(soap_body, "DeliveryAddress")
+        pickup_address_elem = find_any(soap_body, "PickupAddress")
+        recipient_phone_elem = find_any(soap_body, "RecipientPhone")
+        package_details_elem = find_any(soap_body, "PackageDetails")
+        order_id_elem = find_any(soap_body, "OrderId")
+        notes_elem = find_any(soap_body, "Notes")
+        total_weight_elem = find_any(soap_body, "TotalWeight")
+        items_elem = find_any(soap_body, "Items")
+
+        # Print debug info
         print(f"[CMS] DEBUG: Elements found:")
-        print(
-            f"  ClientId: {client_id_elem is not None} - {client_id_elem.text if client_id_elem is not None else 'None'}"
-        )
-        print(
-            f"  RecipientName: {recipient_name_elem is not None} - {recipient_name_elem.text if recipient_name_elem is not None else 'None'}"
-        )
-        print(
-            f"  RecipientAddress: {recipient_address_elem is not None} - {recipient_address_elem.text if recipient_address_elem is not None else 'None'}"
-        )
-        print(
-            f"  RecipientPhone: {recipient_phone_elem is not None} - {recipient_phone_elem.text if recipient_phone_elem is not None else 'None'}"
-        )
-        print(
-            f"  PackageDetails: {package_details_elem is not None} - {package_details_elem.text if package_details_elem is not None else 'None'}"
-        )
+        print(f"  ClientId: {client_id_elem is not None} - {client_id_elem.text if client_id_elem is not None else 'None'}")
+        print(f"  RecipientName: {recipient_name_elem is not None} - {recipient_name_elem.text if recipient_name_elem is not None else 'None'}")
+        print(f"  RecipientAddress: {recipient_address_elem is not None} - {recipient_address_elem.text if recipient_address_elem is not None else 'None'}")
+        print(f"  deliveryAddress: {delivery_address_elem is not None} - {delivery_address_elem.text if delivery_address_elem is not None else 'None'}")
+        print(f"  pickupAddress: {pickup_address_elem is not None} - {pickup_address_elem.text if pickup_address_elem is not None else 'None'}")
+        print(f"  RecipientPhone: {recipient_phone_elem is not None} - {recipient_phone_elem.text if recipient_phone_elem is not None else 'None'}")
+        print(f"  PackageDetails: {package_details_elem is not None} - {package_details_elem.text if package_details_elem is not None else 'None'}")
+        print(f"  notes: {notes_elem is not None} - {notes_elem.text if notes_elem is not None else 'None'}")
+        print(f"  totalWeight: {total_weight_elem is not None} - {total_weight_elem.text if total_weight_elem is not None else 'None'}")
+        print(f"  items: {items_elem is not None}")
 
-        # Check if elements exist and have text
+        # Check required fields
         missing = []
         if client_id_elem is None or not client_id_elem.text:
             missing.append("ClientId")
         if recipient_name_elem is None or not recipient_name_elem.text:
             missing.append("RecipientName")
-        if recipient_address_elem is None or not recipient_address_elem.text:
-            missing.append("RecipientAddress")
+        # Accept either RecipientAddress or deliveryAddress
+        if (recipient_address_elem is None or not recipient_address_elem.text) and (delivery_address_elem is None or not delivery_address_elem.text):
+            missing.append("RecipientAddress/deliveryAddress")
         if recipient_phone_elem is None or not recipient_phone_elem.text:
             missing.append("RecipientPhone")
-        if package_details_elem is None or not package_details_elem.text:
-            missing.append("PackageDetails")
+        # Accept either PackageDetails or items
+        if (package_details_elem is None or not package_details_elem.text) and items_elem is None:
+            missing.append("PackageDetails/items")
 
         if missing:
             print(f"[CMS] DEBUG: Missing or empty fields: {missing}")
@@ -249,40 +276,113 @@ def handle_create_order(soap_body):
 
         client_id = client_id_elem.text.strip()
         recipient_name = recipient_name_elem.text.strip()
-        recipient_address = recipient_address_elem.text.strip()
+        # Use deliveryAddress if RecipientAddress is missing
+        if recipient_address_elem is not None and recipient_address_elem.text:
+            recipient_address = recipient_address_elem.text.strip()
+        elif delivery_address_elem is not None and delivery_address_elem.text:
+            recipient_address = delivery_address_elem.text.strip()
+        else:
+            recipient_address = ""
         recipient_phone = recipient_phone_elem.text.strip()
-        package_details = package_details_elem.text.strip()
+        # Use PackageDetails if present, else fallback to items
+        package_details = package_details_elem.text.strip() if package_details_elem is not None and package_details_elem.text else ""
 
-        print(
-            f"[CMS] DEBUG: Extracted data - ClientId: '{client_id}', RecipientName: '{recipient_name}'"
-        )
+        # Parse items from packageDetails string or from items element
+        items_data = []
+        import re
+        if package_details and "#" in package_details:
+            item_parts = package_details.split(";")
+            for part in item_parts:
+                part = part.strip()
+                if part.startswith("#"):
+                    try:
+                        match = re.search(r'#\d+:\s*([^(]+)\s*\(ID:\s*([^,]+),\s*Qty:\s*(\d+),\s*Weight:\s*([\d.]+)kg\)', part)
+                        if match:
+                            items_data.append({
+                                "itemId": match.group(2).strip(),
+                                "description": match.group(1).strip(),
+                                "quantity": int(match.group(3)),
+                                "weightKg": float(match.group(4))
+                            })
+                            print(f"[CMS] Parsed item: {match.group(1).strip()} (ID: {match.group(2).strip()})")
+                    except Exception as e:
+                        print(f"[CMS] Could not parse item from: {part}, error: {e}")
+
+        # If items element is present, parse its children (handle namespaced tags)
+        if items_elem is not None:
+            for item_elem in items_elem:
+                def find_item_field(elem, field):
+                    # Try namespaced first
+                    val = elem.find(f"cms:{field}", NAMESPACES)
+                    if val is not None and val.text:
+                        return val.text.strip()
+                    # Try without namespace
+                    val = elem.find(field)
+                    if val is not None and val.text:
+                        return val.text.strip()
+                    # Try full namespace
+                    val = elem.find(f"{{{NAMESPACES['cms']}}}{field}")
+                    if val is not None and val.text:
+                        return val.text.strip()
+                    return ""
+                item_id = find_item_field(item_elem, "ItemId")
+                description = find_item_field(item_elem, "Description")
+                quantity = find_item_field(item_elem, "Quantity")
+                weight_kg = find_item_field(item_elem, "WeightKg")
+                items_data.append({
+                    "itemId": item_id,
+                    "description": description,
+                    "quantity": int(quantity) if quantity else 0,
+                    "weightKg": float(weight_kg) if weight_kg else 0.0
+                })
+
+        if not items_data:
+            print("[CMS] No items parsed from package details or items, using defaults")
+            items_data = [
+                {"itemId": "ITEM001", "description": "Wireless Mouse", "quantity": 2, "weightKg": 0.2},
+                {"itemId": "ITEM002", "description": "Keyboard", "quantity": 1, "weightKg": 0.8}
+            ]
+
+        print(f"[CMS] Storing {len(items_data)} items for order")
+        print("[CMS] Items:")
+        for idx, item in enumerate(items_data, 1):
+            print(f"  Item {idx}: {item}")
 
         # Validate client
         if client_id not in clients:
-            print(
-                f"[CMS] DEBUG: Client '{client_id}' not found in clients: {list(clients.keys())}"
-            )
+            print(f"[CMS] DEBUG: Client '{client_id}' not found in clients: {list(clients.keys())}")
             return create_soap_fault("Invalid client ID"), 400
 
         # Generate internal order ID
         internal_order_id = f"ORD{datetime.now().strftime('%Y%m%d')}{len(orders)+1:04d}"
+        external_order_id = order_id_elem.text.strip() if order_id_elem is not None and order_id_elem.text else internal_order_id
 
-        # Use provided external order ID or generate one
-        external_order_id = order_id_elem.text.strip(
-        ) if order_id_elem is not None and order_id_elem.text else internal_order_id
+        # Store extra fields if present
+        pickup_address = pickup_address_elem.text.strip() if pickup_address_elem is not None and pickup_address_elem.text else ""
+        notes = notes_elem.text.strip() if notes_elem is not None and notes_elem.text else ""
+        total_weight = float(total_weight_elem.text.strip()) if total_weight_elem is not None and total_weight_elem.text else None
 
         # Create order
-        orders[internal_order_id] = {
+        order_obj = {
             "client_id": client_id,
             "recipient_name": recipient_name,
             "recipient_address": recipient_address,
             "recipient_phone": recipient_phone,
             "package_details": package_details,
+            "items": items_data,
             "status": "PENDING",
             "created_at": datetime.now().isoformat(),
             "billing_amount": clients[client_id]["billing_rate"],
-            "external_order_id": external_order_id,  # Store the external order ID
+            "external_order_id": external_order_id,
+            "pickup_address": pickup_address,
+            "notes": notes,
+            "total_weight": total_weight,
         }
+        orders[internal_order_id] = order_obj
+
+        print(f"[CMS] Final order created:")
+        import pprint
+        pprint.pprint(order_obj)
 
         response_body = f"""
         <cms:CreateOrderResponse>
@@ -299,8 +399,7 @@ def handle_create_order(soap_body):
             headers={"SOAPAction": "CreateOrderResponse"},
         )
 
-        print(
-            f"[CMS] Order created: {internal_order_id} (external: {external_order_id}) for client {client_id}")
+        print(f"[CMS] Order created: {internal_order_id} (external: {external_order_id}) for client {client_id} with {len(items_data)} items")
         return response
 
     except Exception as e:
@@ -466,7 +565,7 @@ def handle_get_package_order_info(soap_body):
 
 
 def handle_get_orders_by_client(soap_body):
-    """Handle get orders by client request"""
+    """Handle get orders by client request - Enhanced to return items data"""
     try:
         # Try to find ClientId with or without namespace
         client_id_elem = soap_body.find("cms:ClientId", NAMESPACES)
@@ -487,7 +586,6 @@ def handle_get_orders_by_client(soap_body):
                 f"[CMS] Checking order {order_id}: client_id = {order_data.get('client_id')}")
             if order_data.get("client_id") == client_id:
                 client_orders.append({
-                    # Use external order ID
                     "orderId": order_data.get("external_order_id", order_id),
                     "internalOrderId": order_id,
                     "status": order_data.get("status", "PENDING"),
@@ -496,15 +594,28 @@ def handle_get_orders_by_client(soap_body):
                     "recipientAddress": order_data.get("recipient_address", ""),
                     "recipientPhone": order_data.get("recipient_phone", ""),
                     "billingAmount": order_data.get("billing_amount", 0.0),
-                    "packageDetails": order_data.get("package_details", "")
+                    "packageDetails": order_data.get("package_details", ""),
+                    "items": order_data.get("items", [])  # ADD THIS LINE
                 })
 
         print(
             f"[CMS] Found {len(client_orders)} orders for client {client_id}")
 
-        # Build SOAP response with orders
+        # Build SOAP response with orders INCLUDING ITEMS
         orders_xml = ""
         for order in client_orders:
+            # Build items XML
+            items_xml = ""
+            items_data = order.get("items", [])
+            for item in items_data:
+                items_xml += f"""
+                    <cms:Item>
+                        <cms:ItemId>{item.get('itemId', '')}</cms:ItemId>
+                        <cms:Description>{item.get('description', '')}</cms:Description>
+                        <cms:Quantity>{item.get('quantity', 0)}</cms:Quantity>
+                        <cms:WeightKg>{item.get('weightKg', 0.0)}</cms:WeightKg>
+                    </cms:Item>"""
+
             orders_xml += f"""
             <cms:Order>
                 <cms:OrderId>{order['orderId']}</cms:OrderId>
@@ -516,6 +627,8 @@ def handle_get_orders_by_client(soap_body):
                 <cms:RecipientPhone>{order['recipientPhone']}</cms:RecipientPhone>
                 <cms:BillingAmount>{order['billingAmount']}</cms:BillingAmount>
                 <cms:PackageDetails>{order['packageDetails']}</cms:PackageDetails>
+                <cms:Items>{items_xml}
+                </cms:Items>
             </cms:Order>"""
 
         response_body = f"""
@@ -535,6 +648,11 @@ def handle_get_orders_by_client(soap_body):
 
         print(
             f"[CMS] Returning {len(client_orders)} orders for client: {client_id}")
+        # Log items count for each order
+        for order in client_orders:
+            print(
+                f"[CMS] Order {order['orderId']} has {len(order.get('items', []))} items")
+
         return response
 
     except Exception as e:

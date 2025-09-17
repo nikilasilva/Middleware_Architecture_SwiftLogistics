@@ -1,8 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useState } from "react";
-import { ArrowLeft, Package } from "lucide-react";
-import { cmsApi } from "@/lib/api";
 
 interface OrderFormProps {
   onBack: () => void;
@@ -68,30 +67,44 @@ export default function OrderForm({ onBack }: OrderFormProps) {
     setSuccess(null);
 
     try {
-      // Generate packageDetails from items array
-      const packageDetails = formData.items
-        .map(
-          (item, idx) =>
-            `#${idx + 1}: ${item.description} (ID: ${item.itemId}, Qty: ${
-              item.quantity
-            }, Weight: ${item.weightKg}kg)`
-        )
-        .join("; ");
+      // Generate a unique order ID (or let backend generate it)
+      const orderId = `ORD${Date.now().toString().slice(-6)}`;
 
+      // Prepare payload for API Gateway (same as your order.json format)
       const orderPayload = {
+        orderId,
         clientId: formData.clientId,
+        pickupAddress: formData.pickupAddress,
+        deliveryAddress: formData.deliveryAddress,
         recipientName: formData.recipientName,
-        recipientAddress: formData.recipientAddress,
         recipientPhone: formData.recipientPhone,
-        packageDetails,
+        items: formData.items,
+        notes: formData.notes,
       };
 
-      const response = await cmsApi.createOrder(orderPayload);
-      setSuccess("Order created successfully!");
+      console.log("Creating order via API Gateway:", orderPayload);
+
+      // Call the API Gateway endpoint (port 8089)
+      const response = await fetch("http://localhost:8089/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(orderPayload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log("Order creation response:", result);
+
+      setSuccess(`Order created successfully! ${result.wmsStatus || ''}`);
+
+      // Reset form after successful creation
       setFormData({
         clientId: "CLIENT001",
-        pickupAddress: "",
-        deliveryAddress: "",
+        pickupAddress: "123 Main St, Colombo",
+        deliveryAddress: "456 Kandy Road, Kandy",
         clientName: "",
         clientEmail: "",
         recipientName: "",
@@ -109,9 +122,15 @@ export default function OrderForm({ onBack }: OrderFormProps) {
         ],
         notes: "",
       });
+
+      // Navigate back to dashboard after 2 seconds
+      setTimeout(() => {
+        onBack();
+      }, 2000);
+
     } catch (err: any) {
-      setError("Failed to create order. Please try again.");
       console.error("Order creation error:", err);
+      setError(`Failed to create order: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -163,55 +182,55 @@ export default function OrderForm({ onBack }: OrderFormProps) {
     }));
   };
 
-  // Actual API call to create order
-  const createOrder = async (orderPayload: any) => {
-    try {
-      console.log("Creating order with payload:", orderPayload);
-      const response = await fetch("http://localhost:8089/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(orderPayload),
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      console.log("Order creation response:", data);
-      return data;
-    } catch (err) {
-      console.error("Error in createOrder:", err);
-      throw err;
-    }
-  };
+  // // Actual API call to create order
+  // const createOrder = async (orderPayload: any) => {
+  //   try {
+  //     console.log("Creating order with payload:", orderPayload);
+  //     const response = await fetch("http://localhost:8089/api/orders", {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify(orderPayload),
+  //     });
+  //     if (!response.ok) {
+  //       throw new Error(`HTTP error! status: ${response.status}`);
+  //     }
+  //     const data = await response.json();
+  //     console.log("Order creation response:", data);
+  //     return data;
+  //   } catch (err) {
+  //     console.error("Error in createOrder:", err);
+  //     throw err;
+  //   }
+  // };
 
-  // Use this for actual API submission
-  const handleMockCreate = async () => {
-    setLoading(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      // Prepare payload as per API spec
-      const orderPayload = {
-        orderId: "ORD001", // In real app, generate or get from backend
-        clientId: formData.clientId,
-        pickupAddress: formData.pickupAddress,
-        deliveryAddress: formData.deliveryAddress,
-        recipientName: formData.recipientName,
-        recipientPhone: formData.recipientPhone,
-        items: formData.items,
-        notes: formData.notes,
-      };
-      const result = await createOrder(orderPayload);
-      setSuccess("Order created successfully! " + (result?.wmsStatus || ""));
-      setLoading(false);
-      setTimeout(() => {
-        onBack();
-      }, 1200);
-    } catch (err: any) {
-      setError("Failed to create order. " + (err?.message || ""));
-      setLoading(false);
-    }
-  };
+  // // Use this for actual API submission
+  // const handleMockCreate = async () => {
+  //   setLoading(true);
+  //   setError(null);
+  //   setSuccess(null);
+  //   try {
+  //     // Prepare payload as per API spec
+  //     const orderPayload = {
+  //       orderId: "ORD001", // In real app, generate or get from backend
+  //       clientId: formData.clientId,
+  //       pickupAddress: formData.pickupAddress,
+  //       deliveryAddress: formData.deliveryAddress,
+  //       recipientName: formData.recipientName,
+  //       recipientPhone: formData.recipientPhone,
+  //       items: formData.items,
+  //       notes: formData.notes,
+  //     };
+  //     const result = await createOrder(orderPayload);
+  //     setSuccess("Order created successfully! " + (result?.wmsStatus || ""));
+  //     setLoading(false);
+  //     setTimeout(() => {
+  //       onBack();
+  //     }, 1200);
+  //   } catch (err: any) {
+  //     setError("Failed to create order. " + (err?.message || ""));
+  //     setLoading(false);
+  //   }
+  // };
 
   return (
     <div className='min-h-screen bg-white text-black'>
@@ -558,17 +577,9 @@ export default function OrderForm({ onBack }: OrderFormProps) {
               <button
                 type='submit'
                 disabled={loading}
-                className='px-6 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors disabled:opacity-50'
-              >
-                {loading ? "Creating..." : "Create Order"}
-              </button>
-              <button
-                type='button'
-                onClick={handleMockCreate}
-                disabled={loading}
                 className='px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50'
               >
-                {loading ? "Creating..." : "Create"}
+                {loading ? "Creating..." : "Create Order"}
               </button>
             </div>
           </form>

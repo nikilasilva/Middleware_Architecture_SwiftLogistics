@@ -13,6 +13,7 @@ const LoginPage: React.FC = () => {
   const mockUser = {
     email: 'user@example.com',
     password: '123',
+    clientId: 'CLIENT001'
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -25,6 +26,7 @@ const LoginPage: React.FC = () => {
       setError('');
       // Set a mock signed-in cookie (expires in 1 day)
       document.cookie = 'signedin=true; path=/; max-age=86400';
+      document.cookie = `clientId=${mockUser.clientId}; path=/; max-age=${60*60*24*7}`;
       router.push('/'); // Redirect to home page
     } else {
       setError('Invalid email or password.');

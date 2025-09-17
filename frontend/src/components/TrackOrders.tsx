@@ -4,6 +4,12 @@ import StatusStepper from "./StatusStepper";
 import EditOrder from "./EditOrder";
 import { useState, useEffect } from "react";
 import { OrderData } from "@/types";
+import { cancelOrder, fetchOrdersByClient } from "@/lib/ordersApi";
+import { ApiOrder } from "@/types/order";
+import ConfirmationModal from "./ConfirmationModal";
+import SuccessModal from "./SuccessModal";
+import OrderStatusModal from "./OrderStatusModal";
+import CancelledOrderModal from "./CancelledOrderModalProps";
 
 interface Order extends OrderData {
   id: string;
@@ -26,87 +32,173 @@ interface TrackOrdersProps {
   onBack: () => void;
 }
 
+// Helper function to get a cookie value
+function getCookie(name: string): string {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop()?.split(';').shift() || '';
+  return '';
+}
+
 export default function TrackOrders({ onBack }: TrackOrdersProps) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [orderToCancel, setOrderToCancel] = useState<string>("");
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [selectedOrderForStatus, setSelectedOrderForStatus] = useState<Order | null>(null);
+  const [showCancelledModal, setShowCancelledModal] = useState(false);
+  const [cancelledOrderNumber, setCancelledOrderNumber] = useState("");
+
+  // Get clientId from cookie
+  const clientId = getCookie('clientId');
 
   useEffect(() => {
-    fetchOrders();
-  }, []);
+    async function loadOrders() {
+      try {
+        setLoading(true);
 
-  const fetchOrders = async () => {
-    try {
-      setLoading(true);
-      // Replace with actual API call
-      const mockOrders: Order[] = [
-        {
-          id: "1",
-          clientId: "CLIENT001",
-          recipientName: "John Doe",
-          recipientAddress: "123 Main St, Colombo",
-          recipientPhone: "+94-77-123-4567",
-          packageDetails: "#1: Wireless Mouse (ID: ITEM001, Qty: 2, Weight: 0.2kg); #2: Keyboard (ID: ITEM002, Qty: 1, Weight: 0.8kg)",
-          status: "in_transit",
-          createdAt: "2024-01-15T10:30:00Z",
-          estimatedDelivery: "2024-01-16T15:00:00Z",
-          trackingNumber: "SL001234",
-          driverName: "Saman Silva",
-          vehicleId: "VH001",
-          items: [
-            { itemId: "ITEM001", description: "Wireless Mouse", quantity: 2, weightKg: 0.2 },
-            { itemId: "ITEM002", description: "Keyboard", quantity: 1, weightKg: 0.8 }
-          ],
-          notes: "Leave at the front desk if not home"
-        },
-        {
-          id: "2",
-          clientId: "CLIENT002",
-          recipientName: "Jane Smith",
-          recipientAddress: "456 Galle Road, Kandy",
-          recipientPhone: "+94-71-987-6543",
-          packageDetails: "#1: T-shirt (ID: ITEM003, Qty: 3, Weight: 0.15kg)",
-          status: "delivered",
-          createdAt: "2024-01-14T08:15:00Z",
-          estimatedDelivery: "2024-01-15T12:00:00Z",
-          trackingNumber: "SL001235",
-          driverName: "Kamal Perera",
-          vehicleId: "VH002",
-          items: [
-            { itemId: "ITEM003", description: "T-shirt", quantity: 3, weightKg: 0.15 }
-          ],
-          notes: "Ring the bell twice"
-        },
-        {
-          id: "3",
-          clientId: "CLIENT001",
-          recipientName: "Bob Johnson",
-          recipientAddress: "789 Hill Street, Galle",
-          recipientPhone: "+94-75-555-1234",
-          packageDetails: "#1: Mobile Phone Case (ID: ITEM004, Qty: 1, Weight: 0.05kg)",
-          status: "pending",
-          createdAt: "2024-01-16T14:20:00Z",
-          trackingNumber: "SL001236",
-          items: [
-            { itemId: "ITEM004", description: "Mobile Phone Case", quantity: 1, weightKg: 0.05 }
-          ],
-          notes: "Call before delivery"
-        },
-      ];
-      setOrders(mockOrders);
-    } catch (error) {
-      console.error("Error fetching orders:", error);
-    } finally {
-      setLoading(false);
+        if (!clientId) {
+          console.error("No client ID found in cookie");
+          setOrders([]);
+          return;
+        }
+
+        const data = await fetchOrdersByClient(clientId);
+
+        // Transform the data to match your Order interface with proper typing
+        const transformedOrders: Order[] = data.orders.map((order: ApiOrder) => ({
+          id: order.orderId || order.internalOrderId || '',
+          clientId: order.clientId || clientId,
+          recipientName: order.recipient || order.recipientName || '',
+          recipientAddress: order.address || order.recipientAddress || '',
+          recipientPhone: order.phone || order.recipientPhone || '',
+          packageDetails: order.packageDetails || '',
+          status: mapStatus(order.status || order.overallStatus || 'PENDING'),
+          createdAt: order.createdAt || new Date().toISOString(),
+          estimatedDelivery: order.estimatedDelivery,
+          trackingNumber: order.trackingNumber || order.orderId || '',
+          driverName: order.driverName,
+          vehicleId: order.vehicleId,
+          items: order.items || [],
+          notes: order.notes
+        }));
+
+        setOrders(transformedOrders);
+      } catch (error) {
+        console.error("Failed to fetch orders:", error);
+        setOrders([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadOrders();
+  }, [clientId]);
+
+  function mapStatus(backendStatus: string): "pending" | "assigned" | "in_transit" | "delivered" | "cancelled" {
+    const statusMap: Record<string, "pending" | "assigned" | "in_transit" | "delivered" | "cancelled"> = {
+      'PENDING': 'pending',
+      'PROCESSING': 'assigned',
+      'ASSIGNED': 'assigned',
+      'IN_TRANSIT': 'in_transit',
+      'DELIVERED': 'delivered',
+      'CANCELLED': 'cancelled'
+    };
+
+    return statusMap[backendStatus.toUpperCase()] || 'pending';
+  }
+
+  // const fetchOrders = async () => {
+  //   try {
+  //     setLoading(true);
+  //     // Replace with actual API call
+  //     const mockOrders: Order[] = [
+  //       {
+  //         id: "1",
+  //         clientId: "CLIENT001",
+  //         recipientName: "John Doe",
+  //         recipientAddress: "123 Main St, Colombo",
+  //         recipientPhone: "+94-77-123-4567",
+  //         packageDetails: "#1: Wireless Mouse (ID: ITEM001, Qty: 2, Weight: 0.2kg); #2: Keyboard (ID: ITEM002, Qty: 1, Weight: 0.8kg)",
+  //         status: "in_transit",
+  //         createdAt: "2024-01-15T10:30:00Z",
+  //         estimatedDelivery: "2024-01-16T15:00:00Z",
+  //         trackingNumber: "SL001234",
+  //         driverName: "Saman Silva",
+  //         vehicleId: "VH001",
+  //         items: [
+  //           { itemId: "ITEM001", description: "Wireless Mouse", quantity: 2, weightKg: 0.2 },
+  //           { itemId: "ITEM002", description: "Keyboard", quantity: 1, weightKg: 0.8 }
+  //         ],
+  //         notes: "Leave at the front desk if not home"
+  //       },
+  //       {
+  //         id: "2",
+  //         clientId: "CLIENT002",
+  //         recipientName: "Jane Smith",
+  //         recipientAddress: "456 Galle Road, Kandy",
+  //         recipientPhone: "+94-71-987-6543",
+  //         packageDetails: "#1: T-shirt (ID: ITEM003, Qty: 3, Weight: 0.15kg)",
+  //         status: "delivered",
+  //         createdAt: "2024-01-14T08:15:00Z",
+  //         estimatedDelivery: "2024-01-15T12:00:00Z",
+  //         trackingNumber: "SL001235",
+  //         driverName: "Kamal Perera",
+  //         vehicleId: "VH002",
+  //         items: [
+  //           { itemId: "ITEM003", description: "T-shirt", quantity: 3, weightKg: 0.15 }
+  //         ],
+  //         notes: "Ring the bell twice"
+  //       },
+  //       {
+  //         id: "3",
+  //         clientId: "CLIENT001",
+  //         recipientName: "Bob Johnson",
+  //         recipientAddress: "789 Hill Street, Galle",
+  //         recipientPhone: "+94-75-555-1234",
+  //         packageDetails: "#1: Mobile Phone Case (ID: ITEM004, Qty: 1, Weight: 0.05kg)",
+  //         status: "pending",
+  //         createdAt: "2024-01-16T14:20:00Z",
+  //         trackingNumber: "SL001236",
+  //         items: [
+  //           { itemId: "ITEM004", description: "Mobile Phone Case", quantity: 1, weightKg: 0.05 }
+  //         ],
+  //         notes: "Call before delivery"
+  //       },
+  //     ];
+  //     setOrders(mockOrders);
+  //   } catch (error) {
+  //     console.error("Error fetching orders:", error);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+
+  const handleEditOrder = (order: Order) => {
+    // Only allow editing for pending orders
+    if (order.status === "pending") {
+      setEditingOrder(order);
+    } else if (order.status === "cancelled") {
+      // For cancelled orders
+      setCancelledOrderNumber(order.trackingNumber);
+      setShowCancelledModal(true);
+      return;
+    } else {
+      // For non-pending, non-cancelled orders, show status details
+      setSelectedOrderForStatus(order);
+      setShowStatusModal(true);
     }
   };
 
-  const handleEditOrder = (order: Order) => {
-    if (order.status === "pending") {
-      setEditingOrder(order);
-    }
+  // Handler for status modal close
+  const handleCloseStatusModal = () => {
+    setShowStatusModal(false);
+    setSelectedOrderForStatus(null);
   };
 
   const handleSaveOrder = (updatedOrder: Order) => {
@@ -122,8 +214,8 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
 
     console.log("Saving order:", orderWithUpdatedDetails);
 
-    setOrders(prev => 
-      prev.map(order => 
+    setOrders(prev =>
+      prev.map(order =>
         order.id === orderWithUpdatedDetails.id ? orderWithUpdatedDetails : order
       )
     );
@@ -134,13 +226,54 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
     setEditingOrder(null);
   };
 
-  const handleCancelOrder = (orderId: string) => {
+  const handleCancelOrder = async (orderId: string) => {
     console.log("Cancelling order ID:", orderId);
-    setOrders(prev => 
-      prev.map(order => 
-        order.id === orderId ? { ...order, status: "cancelled" } : order
-      )
-    );
+
+    // Show confirmation dialog    
+    setOrderToCancel(orderId);
+    setShowCancelModal(true);
+  };
+
+  // Handle confirmation from modal
+  const handleConfirmCancel = async () => {
+    setShowCancelModal(false);
+
+    if (!orderToCancel) return;
+
+    try {
+      console.log("Cancelling order ID:", orderToCancel);
+
+      // Use the API function
+      const result = await cancelOrder(orderToCancel);
+      console.log("Cancel order response:", result);
+
+      if (result.success) {
+        // Update local state to reflect cancellation
+        setOrders(prev =>
+          prev.map(order =>
+            order.id === orderToCancel ? { ...order, status: "cancelled" } : order
+          )
+        );
+
+        // Show success message
+        setSuccessMessage(result.message || "Order cancelled successfully!");
+        setShowSuccessModal(true);
+      } else {
+        throw new Error(result.error || "Failed to cancel order");
+      }
+
+    } catch (error) {
+      console.error("Error cancelling order:", error);
+      alert(`Failed to cancel order: ${(error as Error).message}`);
+    } finally {
+      setOrderToCancel("");
+    }
+  };
+
+  // ADD: Handle cancel from modal
+  const handleCancelFromModal = () => {
+    setShowCancelModal(false);
+    setOrderToCancel("");
   };
 
   const filteredOrders = orders.filter((order) => {
@@ -237,24 +370,37 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
               </div>
             ) : (
               filteredOrders.map((order) => (
-                <div 
-                  key={order.id} 
-                  className={`card p-6 cursor-pointer transition-all ${order.status === "pending" ? "hover:shadow-md" : ""}`}
+                <div
+                  key={order.id}
+                  className={`card p-6 cursor-pointer transition-all hover:shadow-md ${order.status === "pending"
+                    ? "hover:border-blue-300"
+                    : "hover:border-green-300"
+                    }`}
                   onClick={() => handleEditOrder(order)}
                 >
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Column 1: Order Info - JSON details */}
                     <div>
+
                       <div className="flex items-center justify-between mb-2">
                         <h3 className="text-lg font-semibold">
                           Tracking: {order.trackingNumber}
                         </h3>
-                        {order.status === "pending" && (
+                        {order.status === "pending" ? (
                           <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
                             Click to edit
                           </span>
+                        ) : order.status === "cancelled" ? (
+                          <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
+                            Order cancelled
+                          </span>
+                        ) : (
+                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                            Click for status details
+                          </span>
                         )}
                       </div>
+
                       <div className="mb-1 text-gray-600">
                         <strong>Client ID:</strong> {order.clientId}
                       </div>
@@ -274,7 +420,7 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
                         <div className="mb-1 text-gray-600">
                           <strong>Items:</strong>
                           <ul className="ml-4 list-disc">
-                            {order.items.map((item, idx) => (
+                            {order.items.map((item) => (
                               <li key={item.itemId}>
                                 {item.description} (ID: {item.itemId}, Qty: {item.quantity}, Weight: {item.weightKg}kg)
                               </li>
@@ -315,8 +461,23 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
                         </div>
                       </div>
                       <div className="flex flex-col gap-2">
+
+                        {/* Status Details Button */}
+                        {order.status !== "cancelled" && (
+                          <button
+                            className="btn-secondary text-sm py-1 w-full"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedOrderForStatus(order);
+                              setShowStatusModal(true);
+                            }}
+                          >
+                            View Status Details
+                          </button>
+                        )}
+
                         {order.driverName && (
-                          <button 
+                          <button
                             className="btn-secondary text-sm py-1 w-full"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -328,11 +489,11 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
                         )}
                         {/* Cancel Order Button */}
                         {order.status !== "cancelled" && order.status !== "delivered" && (
-                          <button 
+                          <button
                             className="text-sm py-1 w-full border border-red-500 text-red-500 rounded hover:bg-red-50 transition-colors"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleCancelOrder(order.id);
+                              handleCancelOrder(order.trackingNumber);
                             }}
                           >
                             Cancel Order
@@ -376,12 +537,44 @@ export default function TrackOrders({ onBack }: TrackOrdersProps) {
 
       {/* Edit Order Modal */}
       {editingOrder && (
-        <EditOrder 
-          order={editingOrder} 
+        <EditOrder
+          order={editingOrder}
           onSave={handleSaveOrder}
           onCancel={handleCancelEdit}
         />
       )}
+
+      {/* Cancelled Order Modal */}
+      <CancelledOrderModal
+        isOpen={showCancelledModal}
+        orderNumber={cancelledOrderNumber}
+        onClose={() => setShowCancelledModal(false)}
+      />
+
+      <ConfirmationModal
+        isOpen={showCancelModal}
+        title="Cancel Order"
+        message={`Are you sure you want to cancel order ${orderToCancel}? This action cannot be undone and will notify all relevant parties.`}
+        confirmText="Yes, Cancel Order"
+        cancelText="Keep Order"
+        confirmButtonColor="bg-red-600 hover:bg-red-700 focus:ring-red-500"
+        onConfirm={handleConfirmCancel}
+        onCancel={handleCancelFromModal}
+      />
+
+      <SuccessModal
+        isOpen={showSuccessModal}
+        title="Order Cancelled"
+        message={successMessage}
+        onClose={() => setShowSuccessModal(false)}
+      />
+
+      <OrderStatusModal
+        isOpen={showStatusModal}
+        orderId={selectedOrderForStatus?.id || ''}
+        orderDetails={selectedOrderForStatus}
+        onClose={handleCloseStatusModal}
+      />
     </div>
   );
 }

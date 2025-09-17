@@ -194,7 +194,7 @@ public class EsbController {
         logger.info("ESB received detailed order data: {}", orderData);
 
         try {
-            // Extract data including items
+            // Extract basic order data
             String orderId = (String) orderData.get("orderId");
             String clientId = (String) orderData.get("clientId");
             String deliveryAddress = (String) orderData.get("deliveryAddress");
@@ -202,17 +202,14 @@ public class EsbController {
             String recipientName = (String) orderData.get("recipientName");
             String recipientPhone = (String) orderData.get("recipientPhone");
             String notes = (String) orderData.get("notes");
-            Double totalWeight = (Double) orderData.get("totalWeight");
-            Integer totalItems = (Integer) orderData.get("totalItems");
+            Double totalWeight = orderData.get("totalWeight") != null ? ((Number) orderData.get("totalWeight")).doubleValue() : 0.0;
+            Integer totalItems = orderData.get("totalItems") != null ? (Integer) orderData.get("totalItems") : 0;
             List<?> items = (List<?>) orderData.get("items");
 
             logger.info("Processing order {} with {} items ({}kg total) for recipient: {}",
                     orderId, totalItems, totalWeight, recipientName);
 
-            Map<String, Object> response = new HashMap<>();
-            Map<String, Boolean> registrationResults = new HashMap<>();
-
-            // Create detailed order object
+            // Create DeliveryOrder object
             DeliveryOrder order = new DeliveryOrder();
             order.setOrderId(orderId);
             order.setClientId(clientId);
@@ -221,8 +218,28 @@ public class EsbController {
             order.setRecipientName(recipientName);
             order.setRecipientPhone(recipientPhone);
             order.setNotes(notes);
-            order.setTotalWeight(totalWeight != null ? totalWeight : 0.0);
-            order.setTotalItems(totalItems != null ? totalItems : 0);
+            order.setTotalWeight(totalWeight);
+            order.setTotalItems(totalItems);
+
+            // Map items from request
+            List<DeliveryOrder.OrderItem> orderItems = null;
+            if (items != null && !items.isEmpty()) {
+                orderItems = new ArrayList<>();
+                for (Object obj : items) {
+                    Map<String, Object> itemMap = (Map<String, Object>) obj;
+                    DeliveryOrder.OrderItem item = new DeliveryOrder.OrderItem(
+                            (String) itemMap.get("itemId"),
+                            (String) itemMap.get("description"),
+                            itemMap.get("quantity") != null ? ((Number) itemMap.get("quantity")).intValue() : 0,
+                            itemMap.get("weightKg") != null ? ((Number) itemMap.get("weightKg")).doubleValue() : 0.0
+                    );
+                    orderItems.add(item);
+                }
+                order.setItems(orderItems);
+            }
+
+            Map<String, Object> response = new HashMap<>();
+            Map<String, Boolean> registrationResults = new HashMap<>();
 
             // 1. Validate client and create order in CMS
             String clientValidation = cmsService.fetchClientData(clientId);
@@ -241,7 +258,7 @@ public class EsbController {
                 registrationResults.put("CMS", false);
             }
 
-            // 2. Create optimized route with ROS (considering weight for vehicle selection)
+            // 2. Create optimized route with ROS
             try {
                 String routeResult = rosService.createOptimizedRoute(deliveryAddress, orderId, totalWeight);
                 logger.info("ROS route creation result: {}", routeResult);
@@ -253,7 +270,7 @@ public class EsbController {
                 registrationResults.put("ROS", false);
             }
 
-            // 3. Register package with WMS (with detailed item information)
+            // 3. Register package with WMS
             try {
                 String wmsResult = wmsService.registerPackage(order);
                 logger.info("WMS package registration result: {}", wmsResult);
@@ -266,7 +283,7 @@ public class EsbController {
             }
 
             // Determine overall success
-            long successfulRegistrations = registrationResults.values().stream().mapToLong(b -> b ? 1 : 0).sum();
+            long successfulRegistrations = registrationResults.values().stream().filter(b -> b).count();
             boolean overallSuccess = successfulRegistrations >= 2;
 
             response.put("success", overallSuccess);
@@ -274,7 +291,7 @@ public class EsbController {
             response.put("clientValidation", clientValidation);
             response.put("registrationResults", registrationResults);
             response.put("itemsSummary", totalItems + " items, " + totalWeight + "kg total");
-            response.put("item list", items);
+            response.put("itemList", orderItems != null ? orderItems : new ArrayList<>());
             response.put("recipient", recipientName);
             response.put("processedBy", "ESB");
             response.put("timestamp", System.currentTimeMillis());
