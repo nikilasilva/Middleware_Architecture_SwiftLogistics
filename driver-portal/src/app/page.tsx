@@ -117,7 +117,7 @@ export default function DriverDashboard() {
 
   return (
     <div className="min-h-screen bg-white text-black">
-      <header className="bg-black py-4 px-6 flex items-center justify-between">
+      <header className="bg-black py-7 px-28 flex items-center justify-between">
         <div className="flex items-center">
           <div className="h-8 w-8 bg-white rounded mr-3 flex items-center justify-center">
             <span className="text-black font-bold text-sm">🚚</span>
@@ -125,17 +125,19 @@ export default function DriverDashboard() {
           <h1 className="text-2xl font-bold text-white">Driver Portal</h1>
         </div>
         <div className="flex items-center gap-4">
+          <span className="text-white font-semibold text-xl">Welcome, {driverName}</span>
           <button
             onClick={refreshOrders}
             disabled={loading}
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
+            className="border border-white text-white px-4 py-2 rounded font-medium 
+             hover:bg-white hover:text-black transition-colors shadow-sm 
+             disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? "Loading..." : "Refresh"}
           </button>
-          <span className="text-white font-semibold">Welcome, {driverName}</span>
           <button
             onClick={handleLogout}
-            className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition-colors"
+            className="bg-white text-black px-4 py-2 rounded shadow hover:bg-gray-200 transition-colors font-bold"
           >
             Logout
           </button>
@@ -172,12 +174,12 @@ export default function DriverDashboard() {
             <p className="text-gray-500 text-lg">Loading your orders...</p>
           </div>
         ) : orders.length === 0 ? (
-          <div className="text-center py-12">
+          <div className="text-center pt-20">
             <div className="text-6xl mb-4">📦</div>
             <p className="text-gray-500 text-lg mb-4">No orders assigned to you.</p>
             <button
               onClick={refreshOrders}
-              className="bg-blue-600 text-white px-6 py-3 rounded hover:bg-blue-700 transition-colors"
+              className="bg-black text-white px-6 py-3 rounded hover:bg-gray-700 transition-colors"
             >
               Check for New Orders
             </button>
